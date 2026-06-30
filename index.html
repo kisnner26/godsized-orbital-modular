@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GOD-SIZED UNIVERSE — Orion Flight</title>
+  <link rel="stylesheet" href="./css/base.css?v=esc" />
+  <link rel="stylesheet" href="./css/hud.css?v=esc" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="boot" class="boot">
+    <div class="boot__small">EVA / ORBITAL OBSERVATION MISSION</div>
+    <div class="boot__title">GOD-SIZED UNIVERSE</div>
+    <div class="boot__status" id="bootStatus">Cargando modelos GLB de Meshy...</div>
+    <button id="startSimulation" class="boot__start" disabled>CARGANDO...</button>
+    <div class="boot__hint">Primero verás una cinemática desde el interior de la nave. Luego controlarás la Orion-07 o entrarás en Exploración para viajar entre sistemas y descender a mundos procedurales.<br>Pulsa <strong>P</strong> (o <strong>Select</strong> en el mando) para abrir ajustes (sonido, modo de juego, gráficos).</div>
+  </div>
+
+  <div id="helmet" class="helmet hidden">
+    <div class="helmet__rim"></div>
+    <div class="helmet__glass"></div>
+    <div class="crosshair"></div>
+  </div>
+
+  <section id="hud" class="hud hidden">
+    <div class="hud__top">
+      <div>
+        <span class="hud__label">MISSION</span>
+        <strong id="missionTitle">ORION-07 / CINEMATIC COCKPIT</strong>
+      </div>
+      <div class="hud__clock" id="missionClock">00:00:00</div>
+    </div>
+
+    <div class="hud__bottom">
+      <div class="hud__card">
+        <span class="hud__label">VELOCIDAD</span>
+        <strong id="speedReadout">0.0 m/s</strong>
+      </div>
+      <div class="hud__card">
+        <span class="hud__label">ALTITUD</span>
+        <strong id="altitudeReadout">-- m</strong>
+      </div>
+      <div class="hud__card hud__card--center">
+        <span class="hud__label">OBJETIVO</span>
+        <strong id="bodyReadout">VUELO LIBRE</strong>
+      </div>
+      <div class="hud__card">
+        <span class="hud__label">BIOMA</span>
+        <strong id="biomeReadout">ESPACIO</strong>
+      </div>
+      <div class="hud__card hud__card--right">
+        <span class="hud__label">MOTORES</span>
+        <strong id="o2Readout">STANDBY</strong>
+      </div>
+    </div>
+
+  </section>
+
+  <div id="speedControl" class="speedctl hidden">
+    <span class="speedctl__label">VELOCIDAD MÁX. DE LA NAVE</span>
+    <div class="speedctl__row">
+      <button id="speedDown" title="Reducir ( - )">−</button>
+      <input id="speedSlider" type="range" min="3" max="600" value="300">
+      <button id="speedUp" title="Aumentar ( + )">+</button>
+      <strong id="speedValue">300</strong>
+    </div>
+  </div>
+
+  <!-- Menú de ajustes (se abre con ESC). Pausa la simulación. -->
+  <section id="settingsMenu" class="settings hidden" aria-label="Ajustes">
+    <div class="settings__panel" role="dialog" aria-modal="true">
+      <header class="settings__head">
+        <span class="settings__eyebrow">ORION-07</span>
+        <h2>AJUSTES</h2>
+        <button id="settingsClose" class="settings__close" title="Cerrar (ESC)">×</button>
+      </header>
+
+      <div class="settings__section">
+        <span class="settings__title">MODO DE JUEGO</span>
+        <div class="settings__modes" role="group" aria-label="Seleccionar modo de juego">
+          <button id="modeSolar" type="button" class="active" aria-pressed="true">Sistema solar</button>
+          <button id="modeFree" type="button" aria-pressed="false">Exploración</button>
+        </div>
+        <strong id="modeStatus" class="settings__hint">Órbitas y observación</strong>
+      </div>
+
+      <div class="settings__section">
+        <span class="settings__title">SONIDO</span>
+        <label class="settings__row">Volumen de motores
+          <input id="setVolume" type="range" min="0" max="100" value="34">
+          <strong id="setVolumeVal">34</strong>
+        </label>
+        <label class="settings__check"><input id="setVoice" type="checkbox" checked> Narración por voz</label>
+      </div>
+
+      <div class="settings__section">
+        <span class="settings__title">GRÁFICOS</span>
+        <div class="settings__modes" role="group" aria-label="Calidad gráfica">
+          <button id="gfxLow" type="button">Rendimiento</button>
+          <button id="gfxMed" type="button" class="active">Equilibrado</button>
+          <button id="gfxHigh" type="button">Alta</button>
+        </div>
+        <label class="settings__row">Intensidad de brillo
+          <input id="setBloom" type="range" min="0" max="120" value="62">
+          <strong id="setBloomVal">0.62</strong>
+        </label>
+      </div>
+
+      <footer class="settings__foot">Pulsa <kbd>P</kbd> (o <kbd>Select</kbd> en el mando) para abrir o cerrar este menú.</footer>
+    </div>
+  </section>
+
+  <aside id="controlPanel" class="panel hidden">
+    <header>
+      <span>CONDICIONES · <strong id="condBody">TIERRA</strong></span>
+      <button id="closePanel">×</button>
+    </header>
+    <label>Tipo
+      <select id="bodyType">
+        <option value="planet">Planeta</option>
+        <option value="comet">Cometa</option>
+      </select>
+    </label>
+    <div class="panel__grid">
+      <label>X AU <input id="posX" type="number" value="1.0" step="0.1"></label>
+      <label>Y AU <input id="posY" type="number" value="0" step="0.1"></label>
+      <label>Z AU <input id="posZ" type="number" value="0" step="0.1"></label>
+      <label>VX km/s <input id="velX" type="number" value="0" step="1"></label>
+      <label>VY km/s <input id="velY" type="number" value="29.8" step="1"></label>
+      <label>VZ km/s <input id="velZ" type="number" value="0" step="1"></label>
+    </div>
+    <div class="panel__section">
+      <span>CONTROL DE NAVE</span>
+      <label>Potencia motores <input id="thrustPower" type="range" min="10" max="200" value="35"></label>
+      <label>Velocidad máxima <input id="maxSpeed" type="range" min="3" max="600" value="300"></label>
+    </div>
+    <button id="applyOrbit" class="panel__apply">APLICAR ÓRBITA</button>
+    <p>Gravitación universal + segunda ley de Newton: F = G·M·m/r², a = F/m. Cambia posición y velocidad para observar cómo se modifica la trayectoria.</p>
+  </aside>
+
+  <div id="approachOverlay" class="approach hidden">
+    <div class="approach__scan"></div>
+    <div class="approach__text">APROXIMACIÓN AL SISTEMA SOLAR</div>
+    <div class="approach__sub">Autopiloto reduciendo velocidad · Preparando observación orbital</div>
+  </div>
+
+  <section id="studyMenu" class="study hidden">
+    <div class="study__box">
+      <span class="study__eyebrow">OBJETIVO DE LA PRÁCTICA</span>
+      <h2>¿Qué movimiento quieres observar?</h2>
+      <p>Selecciona un cuerpo. El simulador usará las condiciones iniciales de posición y velocidad para mostrar su trayectoria según la gravitación universal y la segunda ley de Newton.</p>
+      <div class="study__actions">
+        <button id="observePlanet">Observar planeta</button>
+        <button id="observeComet">Observar cometa</button>
+      </div>
+      <small>Luego puedes cambiar condiciones iniciales con C y salir de la observación.</small>
+    </div>
+  </section>
+
+  <button id="exitObservation" class="exit-observation hidden">SALIR DE OBSERVACIÓN</button>
+
+  <section id="physics" class="physics hidden">
+    <header class="physics__head">
+      <span class="physics__eyebrow">ANÁLISIS FÍSICO EN VIVO</span>
+      <h3 id="phTitle">CUERPO</h3>
+      <span id="phOrbit" class="physics__orbit">ÓRBITA —</span>
+    </header>
+
+    <div class="physics__eqs">
+      <div class="eq" id="eqF">F = G·M·m / r²</div>
+      <div class="eq" id="eqA">a = F / m</div>
+      <div class="eq" id="eqV">v = v₀ + a·Δt</div>
+      <div class="eq" id="eqR">r = r₀ + v·Δt</div>
+    </div>
+
+    <div class="physics__grid">
+      <div><span>DISTANCIA r</span><strong id="phR">—</strong></div>
+      <div><span>RAPIDEZ |v|</span><strong id="phV">—</strong></div>
+      <div><span>ACELERACIÓN |a|</span><strong id="phA">—</strong></div>
+      <div><span>FUERZA F</span><strong id="phFval">—</strong></div>
+      <div><span>ENERGÍA ε</span><strong id="phE">—</strong></div>
+    </div>
+
+    <canvas id="phGraph" width="300" height="118"></canvas>
+    <div class="physics__legend">
+      <span class="lg lg--r">distancia r (AU)</span>
+      <span class="lg lg--v">rapidez |v| (km/s)</span>
+    </div>
+    <div class="physics__vec">
+      <span class="vec vec--v">vector velocidad</span>
+      <span class="vec vec--a">fuerza / aceleración → Sol</span>
+    </div>
+  </section>
+
+  <div id="padToast" class="pad-toast hidden">🎮 Mando conectado</div>
+
+  <div id="controlsHint" class="controls-hint hidden"></div>
+
+  <div id="bodySwitcher" class="body-switcher hidden">
+    <button id="bodyPrev" class="bs__arrow" title="Anterior (◀ / D-Pad)">◀</button>
+    <div class="bs__center">
+      <span class="bs__eyebrow">CUERPO OBSERVADO</span>
+      <strong id="bodyName">TIERRA</strong>
+      <div id="bodyOptions" class="bs__options"></div>
+    </div>
+    <button id="bodyNext" class="bs__arrow" title="Siguiente (▶ / D-Pad)">▶</button>
+  </div>
+
+  <div id="fade" class="fade hidden"></div>
+
+  <div id="cinematic" class="cinematic hidden">
+    <div class="cine__bar cine__bar--top"></div>
+    <div class="cine__bar cine__bar--bottom"></div>
+    <div id="cineTitle" class="cine__title">APROXIMACIÓN AL SISTEMA SOLAR</div>
+  </div>
+
+  <div id="systemSpeed" class="sysspeed hidden">
+    <span class="sysspeed__label">VELOCIDAD DEL SISTEMA</span>
+    <div class="sysspeed__row">
+      <button id="sysSpeedDown" title="Más lento">−</button>
+      <input id="sysSpeedSlider" type="range" min="0.1" max="5" step="0.1" value="1">
+      <button id="sysSpeedUp" title="Más rápido">+</button>
+      <strong id="sysSpeedValue">1.0×</strong>
+    </div>
+  </div>
+
+  <div id="subtitle" class="subtitle hidden">
+    <span id="subtitleSpeaker">ASTRONAUTA</span>
+    <p id="subtitleText"></p>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./js/main.js?v=explorefix2"></script>
+</body>
+</html>
