@@ -11,6 +11,7 @@ const tmp2 = new THREE.Vector3();
 const footBasis = new THREE.Matrix4();
 const footYawQuat = new THREE.Quaternion();
 const footEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+const accelTmp = new THREE.Vector3();   // aceleración del frame (reutilizada, sin new por frame)
 
 export class Player {
   constructor(camera, input) {
@@ -407,7 +408,7 @@ export class Player {
     forward.set(0, 0, -1).applyQuaternion(this.rig.quaternion).normalize();
     right.set(1, 0, 0).applyQuaternion(this.rig.quaternion).normalize();
 
-    const accel = new THREE.Vector3();
+    const accel = accelTmp.set(0, 0, 0);
     const boost = this.input.keys.ShiftLeft || this.input.keys.ShiftRight;
     const lightSpeed = this.lightSpeedActive && this.gameplayMode === 'free';
     // El turbo (tecla M / R3) quintuplica el empuje. Como la velocidad de
