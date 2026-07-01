@@ -2,6 +2,43 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+// Efecto de "velocidad luz": desenfoque radial hacia el centro de pantalla
+// (estelas de estrellas) + un ligero viraje de color (azul al frente, como un
+// corrimiento al azul relativista estilizado) que crece con uWarp (0..1).
+const WARP_SHADER = {
+  uniforms: { tDiffuse: { value: null }, uWarp: { value: 0 } },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uWarp;
+    varying vec2 vUv;
+    void main() {
+      vec4 base = texture2D(tDiffuse, vUv);
+      if (uWarp <= 0.001) { gl_FragColor = base; return; }
+      vec2 toCenter = vUv - 0.5;
+      vec3 col = vec3(0.0);
+      float total = 0.0;
+      const int SAMPLES = 20;
+      for (int i = 0; i < SAMPLES; i++) {
+        float t = float(i) / float(SAMPLES - 1);
+        float scale = 1.0 - uWarp * 0.62 * t;
+        vec2 uv = 0.5 + toCenter * scale;
+        float w = 1.0 - t * 0.85;
+        col += texture2D(tDiffuse, uv).rgb * w;
+        total += w;
+      }
+      col /= total;
+      col = mix(base.rgb, col, uWarp);
+      col += vec3(0.05, 0.14, 0.22) * uWarp;
+      gl_FragColor = vec4(col, base.a);
+    }
+  `
+};
 
 export class Engine {
   constructor(canvas) {
@@ -24,6 +61,8 @@ export class Engine {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.62, 0.55, 0.62);
     this.composer.addPass(this.bloom);
+    this.warpPass = new ShaderPass(WARP_SHADER);
+    this.composer.addPass(this.warpPass);
 
     this.clock = new THREE.Clock();
     this.updaters = [];

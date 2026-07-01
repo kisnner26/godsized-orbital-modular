@@ -96,6 +96,11 @@ export class FreeExploration {
     this.markers.visible = false;
     this.activePlanet = null;
     player.setTerrainProvider(null);
+    player.lightSpeedActive = false;
+    player.lightSpeedBeta = 0;
+    player.lightSpeedGamma = 1;
+    player.properTime = 0;
+    player.coordinateTime = 0;
   }
 
   build() {
