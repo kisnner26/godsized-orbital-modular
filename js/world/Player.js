@@ -419,6 +419,12 @@ export class Player {
     const reverseThrust = (boost ? 10 : 5) * scale;
     const sideThrust = (boost ? 9 : 4.5) * scale;
 
+    // Empuje proporcional: el teclado siempre da 0 o 1, pero los gatillos
+    // analógicos del mando (L2/R2) llegan aquí con la presión real 0..1, así
+    // el empuje deja de ser todo-o-nada y se puede maniobrar con precisión.
+    const fwdIn = Math.max(this.input.keys.KeyW ? 1 : 0, this.input.thrustFwd || 0);
+    const revIn = Math.max(this.input.keys.KeyS ? 1 : 0, this.input.thrustRev || 0);
+
     // Controles estándar: A/D/arriba/abajo siempre disponibles para maniobrar.
     if (this.input.keys.KeyA) accel.addScaledVector(right, -sideThrust);
     if (this.input.keys.KeyD) accel.addScaledVector(right, sideThrust);
@@ -430,16 +436,16 @@ export class Player {
       // acercaría la nave a `lightSpeedC` (el arrastre lo frenaría a un
       // parpadeo de esa velocidad), así que en vez de sumar más empuje se
       // interpola la velocidad directamente hacia el objetivo — como un
-      // motor totalmente distinto, no un turbo más fuerte. W acelera hacia
-      // el tope (casi c, nunca lo toca), soltar W deja caer la velocidad.
-      const target = this.input.keys.KeyW ? this.lightSpeedC * 0.9999 : 0;
+      // motor totalmente distinto, no un turbo más fuerte. W (o el gatillo)
+      // acelera hacia el tope (casi c, nunca lo toca), soltarlo lo frena.
+      const target = fwdIn > 0 ? this.lightSpeedC * 0.9999 * fwdIn : 0;
       const rate = target > 0 ? 3.2 : 1.4;
       forward2.copy(forward).multiplyScalar(target);
       this.vel.lerp(forward2, 1 - Math.exp(-dt / rate));
       this.vel.addScaledVector(accel, dt);
     } else {
-      if (this.input.keys.KeyW) accel.addScaledVector(forward, mainThrust);
-      if (this.input.keys.KeyS) accel.addScaledVector(forward, -reverseThrust);
+      if (fwdIn > 0) accel.addScaledVector(forward, mainThrust * fwdIn);
+      if (revIn > 0) accel.addScaledVector(forward, -reverseThrust * revIn);
       this.vel.addScaledVector(accel, dt);
       const speedCap = this.turboActive ? this.maxSpeed * this.turboMultiplier : this.maxSpeed;
       const v = this.vel.length();
@@ -448,11 +454,10 @@ export class Player {
     }
     this.moveWithCollision(dt);
 
-    // Nivel de empuje para llamas y audio
+    // Nivel de empuje para llamas y audio (ahora proporcional al gatillo)
     this.boosting = !!boost;
-    const fwd = this.input.keys.KeyW ? 1 : 0;
     const anyThrust = accel.lengthSq() > 1e-6 ? 1 : 0;
-    this.throttle = fwd ? (boost ? 1 : 0.72) : (anyThrust ? 0.4 : 0);
+    this.throttle = fwdIn > 0 ? (boost ? fwdIn : 0.72 * fwdIn) : (anyThrust ? 0.4 : 0);
 
     this.speed = this.vel.length();
     this.speedMetersPerSecond = this.speed * 8;
@@ -643,8 +648,12 @@ export class Player {
     const turn = 1.7 * dt;
     if (k.ArrowLeft) this.rotateFootYaw(turn);
     if (k.ArrowRight) this.rotateFootYaw(-turn);
+    if (this.input.gpYaw) this.rotateFootYaw(this.input.gpYaw * dt);
     if (k.ArrowUp) this.footPitch = Math.min(1.15, this.footPitch + 1.1 * dt);
     if (k.ArrowDown) this.footPitch = Math.max(-1.15, this.footPitch - 1.1 * dt);
+    if (this.input.gpPitch) {
+      this.footPitch = THREE.MathUtils.clamp(this.footPitch + this.input.gpPitch * dt, -1.15, 1.15);
+    }
 
     // Reortogonaliza contra la normal del cuadro anterior (evita que forward
     // deje de ser tangente si footUp cambió al caminar por terreno curvo).
