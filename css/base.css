@@ -154,4 +154,6 @@ body.is-free-mode .speedctl{bottom:112px}
   .speedctl{left:16px;right:16px;bottom:20px}
   body.is-free-mode .speedctl{bottom:126px}
   .speedctl__row input[type=range]{width:100%}
+  .speedo{width:92px;height:92px;right:16px;bottom:96px}
+  body.is-free-mode .speedo{bottom:158px}
 }

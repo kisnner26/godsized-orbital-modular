@@ -21,3 +21,22 @@ body.is-steering,body.is-steering #game{cursor:none}
 /* Telemetria planetaria procedural */
 .hud__bottom{grid-template-columns:repeat(5,1fr);gap:14px}
 .hud__card{min-width:132px}
+
+/* Velocímetro analógico tipo nave (aguja + zonas + lectura digital) */
+.speedo{position:fixed;right:34px;bottom:104px;z-index:32;width:128px;height:128px;pointer-events:none;filter:drop-shadow(0 10px 30px rgba(0,0,0,.5))}
+.speedo__dial{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.speedo__track{fill:none;stroke:rgba(255,255,255,.10);stroke-width:7;stroke-linecap:round}
+.speedo__zone{fill:none;stroke-width:7;stroke-linecap:round;opacity:.8}
+.speedo__zone--green{stroke:#57ff8f}
+.speedo__zone--yellow{stroke:#ffd15b}
+.speedo__zone--red{stroke:#ff5a5a}
+.speedo__ticks line{stroke:rgba(220,255,255,.4);stroke-width:2}
+.speedo__needle{stroke:#eafffb;stroke-width:3;stroke-linecap:round;filter:drop-shadow(0 0 5px rgba(120,255,230,.9));transform-origin:70px 70px;transform:rotate(-135deg);transition:transform .12s ease-out}
+.speedo__hub{fill:#0c1a20;stroke:#72ffe4;stroke-width:2}
+.speedo__readout{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);text-align:center;white-space:nowrap}
+.speedo__readout strong{display:block;font-size:16px;color:#eafffb;letter-spacing:.03em;text-shadow:0 0 12px rgba(90,255,230,.45)}
+.speedo__readout span{font-size:8px;letter-spacing:.2em;color:rgba(120,255,230,.55)}
+.speedo__turbo{position:absolute;left:50%;top:78px;transform:translateX(-50%);padding:2px 9px;font-size:8px;letter-spacing:.2em;color:#bfe8ff;background:rgba(20,60,90,.55);border:1px solid rgba(80,190,255,.6);border-radius:10px;text-shadow:0 0 8px rgba(80,190,255,.85);animation:speedoTurboPulse .5s infinite alternate;white-space:nowrap}
+.speedo__turbo.hidden{display:none}
+@keyframes speedoTurboPulse{from{opacity:.5}to{opacity:1}}
+body.is-free-mode .speedo{bottom:180px}

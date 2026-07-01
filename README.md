@@ -206,7 +206,7 @@ js/
     Cockpit.js                   Modelos 3D de nave, cabina, manos y llamas de los propulsores
     SpaceEnvironment.js          Skybox: estrellas, vía láctea y nebulosas
   ui/
-    HUD.js                       Velocidad, altitud, bioma, reloj de misión
+    HUD.js                       Velocímetro analógico, altitud, bioma, reloj de misión
     PhysicsOverlay.js             ★ Panel de análisis físico en vivo (ecuaciones + gráfica)
 assets/models/                  Modelos 3D (.glb) generados con Meshy: nave, cabina, manos
 ```
