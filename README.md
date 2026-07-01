@@ -157,7 +157,7 @@ Modo de vuelo libre sin las barreras del modo anterior: cinco sistemas planetari
 4. **Aproximación al sistema solar** — al acercarte lo suficiente, una cinemática automática reduce la velocidad y encuadra el sistema.
 5. **Selección de cuerpo** — el simulador pregunta qué observar: un planeta o un cometa.
 6. **Observación con física en vivo** — la nave desaparece, la cámara orbita el cuerpo elegido y el panel de análisis físico muestra la simulación en tiempo real (sección anterior).
-7. **Narración** — un astronauta narra la experiencia por voz (Web Speech API, voz en español) con subtítulos en pantalla.
+7. **Narración** — un astronauta narra la experiencia por voz (Web Speech API, la mejor voz en español disponible en el navegador) con subtítulos en pantalla, y cada línea suena como una transmisión de radio EVA real: clic de apertura/cierre de canal y estática de fondo sintetizados con Web Audio, no un archivo de audio.
 
 ---
 
@@ -196,7 +196,7 @@ js/
     Input.js                    Teclado (la nave se gira solo con flechas/mando) + rueda del ratón para zoom
     Gamepad.js                  Soporte de mando PS4/Xbox
     ModelLoader.js               Carga y normaliza modelos GLTF/GLB
-    Narrator.js                  Narración por voz (Web Speech API) + subtítulos
+    Narrator.js                  Narración por voz + subtítulos, con efecto de radio EVA (Web Audio)
     ShipAudio.js                 Motor y empuje sintetizados con Web Audio API (sin archivos de sonido)
   world/
     SolarSystem.js               ★ Física orbital: gravitación, integración numérica, escenarios
