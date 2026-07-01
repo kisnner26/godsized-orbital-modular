@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Engine } from './core/Engine.js?v=warp1';
+import { Engine } from './core/Engine.js?v=fps2';
 import { Input } from './systems/Input.js?v=padfeel1';
 import { GamepadController } from './systems/Gamepad.js?v=padfeel2';
 import { ModelLoader } from './systems/ModelLoader.js';
@@ -55,7 +55,17 @@ let modeSolar = document.getElementById('modeSolar');
 let modeFree = document.getElementById('modeFree');
 let modeStatus = document.getElementById('modeStatus');
 
-const engine = new Engine(canvas);
+// Ajustes de rendimiento persistidos (calidad gráfica + FPS objetivo). Se
+// leen ANTES de crear el motor porque el antialias solo puede decidirse al
+// crear el contexto WebGL: el preset "Rendimiento" lo desactiva.
+let perfSaved = {};
+try { perfSaved = JSON.parse(localStorage.getItem('orion7.perf') || '{}'); } catch { /* localStorage bloqueado */ }
+function savePerf(patch) {
+  Object.assign(perfSaved, patch);
+  try { localStorage.setItem('orion7.perf', JSON.stringify(perfSaved)); } catch { /* sin persistencia */ }
+}
+
+const engine = new Engine(canvas, { antialias: perfSaved.gfx !== 'gfxLow' });
 const input = new Input(canvas);
 const player = new Player(engine.camera, input);
 const loader = new ModelLoader(bootStatus);
@@ -540,10 +550,14 @@ setBloom.addEventListener('input', () => {
   engine.bloom.strength = s;
 });
 const GFX = {
-  gfxLow:   { pr: 1.0, bloom: 0.35, shadows: false, maxLevel: 3 },
-  gfxMed:   { pr: 1.5, bloom: 0.62, shadows: true,  maxLevel: 4 },
-  gfxHigh:  { pr: 2.0, bloom: 0.85, shadows: true,  maxLevel: 5 },
-  gfxUltra: { pr: 2.5, bloom: 1.0,  shadows: true,  maxLevel: 6 }
+  // En "Rendimiento" el bloom se APAGA del todo (bloomOn:false): el
+  // UnrealBloomPass hace varias pasadas de desenfoque a pantalla completa y
+  // es el mayor coste de GPU del juego — apagarlo es la diferencia entre
+  // "va fatal" y "va fluido" en gráficas integradas (portátiles Windows).
+  gfxLow:   { pr: 1.0, bloom: 0.35, bloomOn: false, shadows: false, maxLevel: 3 },
+  gfxMed:   { pr: 1.5, bloom: 0.62, bloomOn: true,  shadows: true,  maxLevel: 4 },
+  gfxHigh:  { pr: 2.0, bloom: 0.85, bloomOn: true,  shadows: true,  maxLevel: 5 },
+  gfxUltra: { pr: 2.5, bloom: 1.0,  bloomOn: true,  shadows: true,  maxLevel: 6 }
 };
 function applyGraphics(preset) {
   const cfg = GFX[preset]; if (!cfg) return;
@@ -551,13 +565,96 @@ function applyGraphics(preset) {
   engine.renderer.setPixelRatio(Math.min(devicePixelRatio, cfg.pr));
   engine.composer.setSize(innerWidth, innerHeight);
   engine.renderer.shadowMap.enabled = cfg.shadows;
+  engine.bloom.enabled = cfg.bloomOn;
   engine.bloom.strength = cfg.bloom;
   setBloom.value = Math.round(cfg.bloom * 100);
   setBloomVal.textContent = cfg.bloom.toFixed(2);
   freeExploration.setMaxLevel?.(cfg.maxLevel);
+  savePerf({ gfx: preset });
 }
 Object.keys(GFX).forEach(id => document.getElementById(id).addEventListener('click', () => applyGraphics(id)));
 shipAudio.setMasterVolume(Number(setVolume.value) / 100);
+
+// GPU integrada detectada y sin preferencia guardada → arrancar en
+// "Rendimiento". Es el caso típico del portátil Windows que va a tirones
+// con el preset Equilibrado pensado para GPUs dedicadas o Apple Silicon.
+function detectWeakGpu() {
+  try {
+    const gl = engine.renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const r = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    return /intel(?!.*arc)|uhd graphics|iris|hd graphics|swiftshader|llvmpipe|mali|adreno/i.test(r);
+  } catch { return false; }
+}
+const weakGpu = detectWeakGpu();
+applyGraphics(GFX[perfSaved.gfx] ? perfSaved.gfx : (weakGpu ? 'gfxLow' : 'gfxMed'));
+
+// ---- FPS objetivo (limitador) + detección de Hz nativos del monitor ----
+const fpsOptionsEl = document.getElementById('fpsOptions');
+const fpsStatusEl = document.getElementById('fpsStatus');
+let currentFpsChoice = typeof perfSaved.fps === 'number' ? perfSaved.fps : null;
+function applyFps(fps) {
+  currentFpsChoice = Math.max(0, Number(fps) || 0);
+  engine.setTargetFps(currentFpsChoice);
+  savePerf({ fps: currentFpsChoice });
+  if (fpsOptionsEl) [...fpsOptionsEl.children].forEach(b =>
+    b.classList.toggle('active', Number(b.dataset.fps) === currentFpsChoice));
+  updateFpsStatus();
+}
+function getNativeAlignedFpsOptions(hz) {
+  const nativeHz = Math.max(24, Math.round(hz || 60));
+  const options = new Set([nativeHz]);
+  for (const div of [2, 3, 4]) {
+    const fps = Math.round(nativeHz / div);
+    if (fps >= 24) options.add(fps);
+  }
+  return [...options].sort((a, b) => a - b);
+}
+function getDefaultFps(hz) {
+  const nativeHz = Math.max(24, Math.round(hz || 60));
+  if (weakGpu) return nativeHz <= 75 ? 30 : Math.round(nativeHz / 2);
+  return Math.min(60, nativeHz);
+}
+function updateFpsStatus() {
+  if (!fpsStatusEl) return;
+  const cap = engine.targetFps > 0 ? `${engine.targetFps} FPS` : `${engine.detectedHz} Hz nativo`;
+  fpsStatusEl.textContent = `Pantalla ${engine.detectedHz} Hz · objetivo ${cap} · real ${Math.round(engine.fps)} FPS`;
+}
+function buildFpsOptions(hz) {
+  if (!fpsOptionsEl) return;
+  fpsOptionsEl.innerHTML = '';
+  const nativeHz = Math.max(24, Math.round(hz || 60));
+  const caps = getNativeAlignedFpsOptions(nativeHz);
+  for (const f of caps) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.fps = f;
+    b.textContent = f === nativeHz ? `${f} FPS / Hz` : `${f} FPS`;
+    b.addEventListener('click', () => applyFps(f));
+    fpsOptionsEl.appendChild(b);
+  }
+  const native = document.createElement('button');
+  native.type = 'button';
+  native.dataset.fps = 0;
+  native.textContent = `Nativo (${nativeHz} Hz)`;
+  native.addEventListener('click', () => applyFps(0));
+  fpsOptionsEl.appendChild(native);
+
+  applyFps(currentFpsChoice !== null ? currentFpsChoice : getDefaultFps(nativeHz));
+}
+// Cap conservador desde el primer frame; al medir los Hz reales se reconstruyen
+// opciones alineadas al monitor (mitad/tercio/cuarto/nativo) para evitar
+// saltos irregulares en pantallas de 120/144/165 Hz.
+engine.setTargetFps(currentFpsChoice !== null ? currentFpsChoice : (weakGpu ? 30 : 60));
+let fpsStatusTimer = 0;
+engine.addUpdater(dt => {
+  fpsStatusTimer += dt;
+  if (fpsStatusTimer >= 0.5) {
+    fpsStatusTimer = 0;
+    updateFpsStatus();
+  }
+});
+engine.detectRefreshRate().then(hz => buildFpsOptions(hz));
 
 document.getElementById('observePlanet').addEventListener('click', () => observe('planet'));
 document.getElementById('observeComet').addEventListener('click', () => observe('comet'));
@@ -815,6 +912,9 @@ engine.addUpdater(dt => {
   const targetWarp = gameplayMode === 'free' ? player.lightSpeedBeta : 0;
   const warpUniform = engine.warpPass.uniforms.uWarp;
   warpUniform.value += (targetWarp - warpUniform.value) * Math.min(1, dt * 3);
+  // Con el warp en reposo la pasada entera se salta (ahorra un blit a
+  // pantalla completa por frame, que en una GPU integrada no es gratis).
+  engine.warpPass.enabled = warpUniform.value > 0.002;
   if (gameplayMode === 'free' && player.canBoard()) {
     interactPrompt.innerHTML = 'Presiona <b>F</b> para volver a la nave';
     interactPrompt.classList.remove('hidden');

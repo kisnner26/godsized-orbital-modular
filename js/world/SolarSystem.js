@@ -105,6 +105,9 @@ void main(){
 }`;
 
 const tmpCometDir = new THREE.Vector3();
+const tmpSimPos = new THREE.Vector3();   // posición del cuerpo observado (reutilizada por frame)
+const tmpSimVec = new THREE.Vector3();   // dirección de flechas (reutilizada por frame)
+const TRAIL_CAP = 700;                   // puntos máximos de la estela (buffer fijo)
 
 function makeOrbit(radius, color=0x39535d, opacity=0.18) {
   const pts = [];
@@ -277,7 +280,7 @@ export class SolarSystem {
     this.textureLoader.setCrossOrigin('anonymous');
     this.sim = null;
     this.trail = null;
-    this.trailPoints = [];
+    this.trailLen = 0;
     this.sunCore = null;
     this.sunCorona = [];
     this.time = 0;
@@ -770,7 +773,7 @@ export class SolarSystem {
     if (this.velArrow) { this.group.remove(this.velArrow); this.disposeObject3D(this.velArrow); }
     if (this.accArrow) { this.group.remove(this.accArrow); this.disposeObject3D(this.accArrow); }
     if (this.cometTail) { this.group.remove(this.cometTail); this.disposeObject3D(this.cometTail); }
-    this.trailPoints = [];
+    this.trailLen = 0;
 
     const radius = look.radius || (type === 'comet' ? .42 : .9);
     let mat;
@@ -859,7 +862,17 @@ export class SolarSystem {
       x:xAU*AU, y:yAU*AU, z:zAU*AU, vx:vxKm*1000, vy:vyKm*1000, vz:vzKm*1000
     };
 
-    this.trail = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: type==='comet'?0x9adfff:0x59b9ff, transparent:true, opacity:.7 }));
+    // Estela con buffer PREASIGNADO: reconstruirla con setFromPoints cada
+    // frame (700 puntos → Float32Array + atributo nuevos por frame) generaba
+    // presión de GC constante — se notaba como micro-tirones en GPUs flojas.
+    const trailGeo = new THREE.BufferGeometry();
+    this.trailAttr = new THREE.BufferAttribute(new Float32Array(TRAIL_CAP * 3), 3);
+    this.trailAttr.setUsage(THREE.DynamicDrawUsage);
+    trailGeo.setAttribute('position', this.trailAttr);
+    trailGeo.setDrawRange(0, 0);
+    this.trailLen = 0;
+    this.trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: type==='comet'?0x9adfff:0x59b9ff, transparent:true, opacity:.7 }));
+    this.trail.frustumCulled = false;
     this.group.add(this.trail);
 
     // Vectores físicos: velocidad (verde) y aceleración/fuerza hacia el Sol (rojo)
@@ -1023,34 +1036,42 @@ export class SolarSystem {
 
     for (let i = 0; i < steps; i++) this.physicsStep(stepDt);
     const b = this.sim;
-    const pos = new THREE.Vector3(b.x/AU*VISUAL_AU, b.y/AU*VISUAL_AU, b.z/AU*VISUAL_AU);
+    const pos = tmpSimPos.set(b.x/AU*VISUAL_AU, b.y/AU*VISUAL_AU, b.z/AU*VISUAL_AU);
     b.mesh.position.copy(pos);
     b.mesh.rotation.y += dt * .5 * ts;
     if (b.moonPivot) b.moonPivot.rotation.y += dt * ts * 0.9;
-    this.trailPoints.push(pos.clone());
-    if (this.trailPoints.length > 700) this.trailPoints.shift();
-    this.trail.geometry.setFromPoints(this.trailPoints);
 
-    // Vectores físicos en vivo
+    // Estela sin asignaciones: buffer fijo, y cuando se llena se desplaza
+    // una posición con copyWithin (memmove barato) en vez de recrear todo.
+    const ta = this.trailAttr.array;
+    if (this.trailLen >= TRAIL_CAP) {
+      ta.copyWithin(0, 3);
+      this.trailLen = TRAIL_CAP - 1;
+    }
+    ta[this.trailLen * 3] = pos.x;
+    ta[this.trailLen * 3 + 1] = pos.y;
+    ta[this.trailLen * 3 + 2] = pos.z;
+    this.trailLen++;
+    this.trail.geometry.setDrawRange(0, this.trailLen);
+    this.trailAttr.needsUpdate = true;
+
+    // Vectores físicos en vivo (sin new: los temps del módulo se reutilizan)
     if (this.velArrow) {
-      const vdir = new THREE.Vector3(b.vx, b.vy, b.vz);
-      const vlen = vdir.length();
+      const vlen = tmpSimVec.set(b.vx, b.vy, b.vz).length();
       if (vlen > 0) {
         this.velArrow.position.copy(pos);
-        this.velArrow.setDirection(vdir.normalize());
+        this.velArrow.setDirection(tmpSimVec.normalize());
         this.velArrow.setLength(THREE.MathUtils.clamp(vlen / 6000, 3, 12), 1.4, 0.8);
       }
-      const adir = pos.clone().multiplyScalar(-1);
-      if (adir.length() > 0) {
+      if (pos.lengthSq() > 0) {
         this.accArrow.position.copy(pos);
-        this.accArrow.setDirection(adir.normalize());
+        this.accArrow.setDirection(tmpSimVec.copy(pos).multiplyScalar(-1).normalize());
         this.accArrow.setLength(THREE.MathUtils.clamp((G*M_SUN/(b.x*b.x+b.y*b.y+b.z*b.z+1)) * 4e6, 2, 10), 1.4, 0.8);
       }
     }
     if (this.cometTail) {
       // La cola apunta en dirección contraria al Sol (viento solar)
-      const dir = pos.clone().normalize().multiplyScalar(4.5);
-      this.cometTail.position.copy(pos).add(dir);
+      this.cometTail.position.copy(pos).add(tmpSimVec.copy(pos).normalize().multiplyScalar(4.5));
       this.cometTail.scale.setScalar(6 + Math.sin(this.time*3)*0.6);
     }
   }
