@@ -155,6 +155,63 @@ body.is-observation .gameplay-settings{top:84px}
 body.is-free-mode .sysspeed,body.is-free-mode .body-switcher,body.is-free-mode .physics{display:none!important}
 body.is-free-mode .speedctl{bottom:112px}
 
+/* ---------- Lección guiada (Tierra) ---------- */
+.lesson-launch{position:fixed;z-index:57;top:180px;left:50%;transform:translateX(-50%);padding:11px 22px;font-size:11px;letter-spacing:.12em;color:#eaffff;background:linear-gradient(135deg,rgba(20,90,70,.55),rgba(4,15,24,.88));border:1px solid rgba(120,255,180,.45);border-radius:22px;cursor:pointer;box-shadow:0 10px 34px rgba(0,0,0,.4),0 0 24px rgba(120,255,180,.12);transition:transform .15s,background .15s;animation:lessonPulse 2.4s ease-in-out infinite}
+.lesson-launch:hover{transform:translateX(-50%) translateY(-1px);background:rgba(40,150,110,.6)}
+@keyframes lessonPulse{0%,100%{box-shadow:0 10px 34px rgba(0,0,0,.4),0 0 18px rgba(120,255,180,.1)}50%{box-shadow:0 10px 34px rgba(0,0,0,.4),0 0 30px rgba(120,255,180,.28)}}
+
+.lesson-diagram{position:fixed;z-index:57;right:28px;top:150px;width:min(300px,calc(100vw - 56px));padding:14px 16px;background:linear-gradient(160deg,rgba(4,15,24,.9),rgba(0,4,8,.76));border:1px solid rgba(120,255,230,.26);border-radius:10px;box-shadow:0 18px 60px rgba(0,0,0,.5);backdrop-filter:blur(14px)}
+.lesson-diagram__eyebrow{font-size:8.5px;letter-spacing:.2em;color:#72ffe4}
+.lesson-diagram__svg{width:100%;height:auto;margin-top:8px;overflow:visible}
+.lg-orbit{fill:none;stroke:rgba(120,255,230,.32);stroke-width:1.4;stroke-dasharray:3 3}
+.lg-sun{fill:#ffb347;filter:drop-shadow(0 0 6px rgba(255,180,60,.75))}
+.lg-earth{fill:#bfe0ff;filter:drop-shadow(0 0 4px rgba(150,210,255,.7))}
+.lg-vec{stroke-width:2;opacity:.3;transition:opacity .3s,stroke-width .3s}
+.lg-vec--r{stroke:#5fc8ff}
+.lg-vec--f{stroke:#ff6a6a}
+.lg-vec--v{stroke:#5fff96}
+.lg-label{font-size:13px;font-weight:500;opacity:.3;transition:opacity .3s,font-weight .3s}
+.lg-label--r{fill:#5fc8ff}
+.lg-label--f{fill:#ff6a6a}
+.lg-label--v{fill:#5fff96}
+.lg-arrowhead--f{fill:#ff6a6a;opacity:.3;transition:opacity .3s}
+.lg-arrowhead--v{fill:#5fff96;opacity:.3;transition:opacity .3s}
+.lesson-diagram.focus-r .lg-vec--r,.lesson-diagram.focus-r .lg-label--r{opacity:1;stroke-width:3.2;font-weight:700}
+.lesson-diagram.focus-f .lg-vec--f,.lesson-diagram.focus-f .lg-label--f,.lesson-diagram.focus-f .lg-arrowhead--f{opacity:1;stroke-width:3.2;font-weight:700}
+.lesson-diagram.focus-v .lg-vec--v,.lesson-diagram.focus-v .lg-label--v,.lesson-diagram.focus-v .lg-arrowhead--v{opacity:1;stroke-width:3.2;font-weight:700}
+.lesson-diagram.focus-orbit .lg-vec,.lesson-diagram.focus-orbit .lg-label,.lesson-diagram.focus-orbit .lg-arrowhead{opacity:.85}
+.lesson-diagram__legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:9.5px;letter-spacing:.03em}
+.lg-legend{color:rgba(220,255,255,.6)}
+.lg-legend--r::before,.lg-legend--f::before,.lg-legend--v::before{content:"●";margin-right:4px;font-size:8px}
+.lg-legend--r::before{color:#5fc8ff}
+.lg-legend--f::before{color:#ff6a6a}
+.lg-legend--v::before{color:#5fff96}
+
+.lesson-panel{position:fixed;z-index:59;left:50%;bottom:168px;transform:translateX(-50%);width:min(560px,calc(100vw - 48px));padding:12px 18px;background:linear-gradient(135deg,rgba(4,15,24,.94),rgba(0,4,8,.86));border:1px solid rgba(120,255,230,.32);border-radius:12px;box-shadow:0 18px 60px rgba(0,0,0,.5);backdrop-filter:blur(14px)}
+.lesson-panel__head{display:flex;align-items:center;gap:10px}
+.lesson-panel__eyebrow{font-size:8px;letter-spacing:.22em;color:#72ffe4;white-space:nowrap}
+.lesson-panel__head strong{flex:1;font-size:14px;font-weight:500;color:#f2ffff;letter-spacing:.03em}
+.lesson-panel__close{width:26px;height:26px;flex:none;border:1px solid rgba(120,255,230,.3);background:rgba(20,80,95,.3);color:#eaffff;border-radius:6px;cursor:pointer;font-size:15px;line-height:1}
+.lesson-panel__close:hover{background:rgba(45,130,140,.55)}
+.lesson-panel__controls{display:flex;align-items:center;gap:10px;margin-top:10px}
+.lesson-panel__controls button{width:34px;height:34px;flex:none;border:1px solid rgba(120,255,230,.35);background:rgba(20,80,95,.32);color:#eaffff;border-radius:8px;cursor:pointer;font-size:13px;transition:background .15s}
+.lesson-panel__controls button:hover{background:rgba(45,130,140,.55)}
+.lesson-panel__dots{display:flex;gap:6px;flex:1;justify-content:center;flex-wrap:wrap}
+.lesson-panel__dots span{width:7px;height:7px;border-radius:50%;background:rgba(120,255,230,.25);transition:background .2s,box-shadow .2s}
+.lesson-panel__dots span.active{background:#72ffe4;box-shadow:0 0 8px rgba(120,255,230,.65)}
+.physics .eq.lesson-highlight{border-left-color:#fff;background:rgba(120,255,230,.16);box-shadow:0 0 18px rgba(120,255,230,.22);animation:eqPulse 1.6s ease-in-out infinite}
+@keyframes eqPulse{0%,100%{box-shadow:0 0 8px rgba(120,255,230,.12)}50%{box-shadow:0 0 20px rgba(120,255,230,.38)}}
+
+@media (max-width:900px){
+  .lesson-diagram{display:none}
+}
+@media (max-width:760px){
+  .lesson-launch{top:auto;bottom:210px;width:min(320px,calc(100vw - 32px));text-align:center;white-space:normal}
+  .lesson-panel{bottom:8px;width:calc(100vw - 32px);padding:8px 12px}
+  .lesson-panel__controls{margin-top:6px}
+  body.lesson-active .physics{bottom:190px}
+}
+
 @media (max-width:760px){
   .gameplay-settings{left:16px;right:16px;top:14px;width:auto}
   .speedctl{left:16px;right:16px;bottom:20px}
