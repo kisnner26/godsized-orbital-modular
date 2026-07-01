@@ -36,7 +36,11 @@ export class Cockpit {
     if (this.cockpit) this.cockpit.visible = first;
     if (this.arms) this.arms.visible = first;
     if (this.ship) this.ship.visible = !first;
-    if (this.shipProxy) this.shipProxy.visible = !first;
+    // El proxy sólo se usa como respaldo si el modelo GLB real no llegó a
+    // cargar; con él siempre visible se dibujaban dos naves superpuestas en
+    // cada cuadro de 3ª persona (coste de render duplicado sin motivo, ya que
+    // el botón de inicio no se habilita hasta que `ship` termina de cargar).
+    if (this.shipProxy) this.shipProxy.visible = !first && !this.ship;
     if (this.thrusters) this.thrusters.visible = !first;  // las llamas no se ven desde dentro
     if (this.interiorLights) {
       const on = [2.4, 1.8, 1.2, 1.2];

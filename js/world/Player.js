@@ -173,8 +173,7 @@ export class Player {
     this.hazardLevel = 0;
     this.collapseTimer = 0;
 
-    this.camera.position.copy(this.chaseCam);
-    this.camera.lookAt(this.chaseLook);
+    this.positionChaseCamera();
   }
 
   // Secuencia CINEMATOGRÁFICA de ~5 s: la cámara hace una toma orbital del
@@ -290,8 +289,7 @@ export class Player {
     this.rig.quaternion.setFromEuler(euler0);
     this.vel.set(0, 0, -0.35);
 
-    this.camera.position.copy(this.chaseCam);
-    this.camera.lookAt(this.chaseLook);
+    this.positionChaseCamera();
   }
 
   updateObservation(dt) {
@@ -316,6 +314,33 @@ export class Player {
     this.speed = 0.0;
   }
 
+  // Posiciona la cámara en modo cabina (1ª persona) o persecución (3ª persona)
+  // según el estado ACTUAL de this.firstPerson. Centraliza esta lógica para que
+  // ningún punto de reinicio (spawn, salida de observación, colapso) pueda dejar
+  // la cámara en 3ª persona mientras la nave/cabina está oculta en modo cabina
+  // (o viceversa), que es lo que causaba el bug de "cámara bugueada, sin nave".
+  positionChaseCamera(shakeAmount = 0, freqX = 7.0, freqY = 6.0) {
+    const t = performance.now() * 0.001;
+    if (this.firstPerson) {
+      this.camera.position.set(
+        this.fpCam.x + Math.sin(t * 5.0) * shakeAmount,
+        this.fpCam.y + Math.cos(t * 4.2) * shakeAmount,
+        this.fpCam.z
+      );
+      // Mira ligeramente hacia abajo para esquivar la consola superior central.
+      this.camera.rotation.set(-0.16, 0, 0);
+    } else {
+      const chaseCam = this.gameplayMode === 'free' ? this.explorationChaseCam : this.chaseCam;
+      const chaseLook = this.gameplayMode === 'free' ? this.explorationChaseLook : this.chaseLook;
+      this.camera.position.set(
+        chaseCam.x + Math.sin(t * freqX) * shakeAmount,
+        chaseCam.y + Math.cos(t * freqY) * shakeAmount,
+        chaseCam.z
+      );
+      this.camera.lookAt(chaseLook);
+    }
+  }
+
   updateFlight(dt) {
     if (this.collapseTimer > 0) {
       this.updateCollapse(dt);
@@ -335,28 +360,10 @@ export class Player {
     euler.set(this.shipPitch, this.shipYaw, this.shipRoll, 'YXZ');
     this.rig.quaternion.setFromEuler(euler);
 
-    const t = performance.now() * 0.001;
-    if (this.firstPerson) {
-      // Vista de cabina: el ojo del piloto, mirando hacia adelante (-Z del rig).
-      const sway = Math.min(this.vel.length() * 0.0009, 0.018);
-      this.camera.position.set(
-        this.fpCam.x + Math.sin(t * 5.0) * sway,
-        this.fpCam.y + Math.cos(t * 4.2) * sway,
-        this.fpCam.z
-      );
-      // Mira ligeramente hacia abajo para esquivar la consola superior central.
-      this.camera.rotation.set(-0.16, 0, 0);
-    } else {
-      const chaseCam = this.gameplayMode === 'free' ? this.explorationChaseCam : this.chaseCam;
-      const chaseLook = this.gameplayMode === 'free' ? this.explorationChaseLook : this.chaseLook;
-      const speedShake = Math.min(this.vel.length() * 0.0014, 0.035);
-      this.camera.position.set(
-        chaseCam.x + Math.sin(t * 7.0) * speedShake,
-        chaseCam.y + Math.cos(t * 6.0) * speedShake,
-        chaseCam.z
-      );
-      this.camera.lookAt(chaseLook);
-    }
+    const shakeAmount = this.firstPerson
+      ? Math.min(this.vel.length() * 0.0009, 0.018)
+      : Math.min(this.vel.length() * 0.0014, 0.035);
+    this.positionChaseCamera(shakeAmount, 7.0, 6.0);
 
     forward.set(0, 0, -1).applyQuaternion(this.rig.quaternion).normalize();
     right.set(1, 0, 0).applyQuaternion(this.rig.quaternion).normalize();
@@ -381,9 +388,7 @@ export class Player {
     const v = this.vel.length();
     if (v > this.maxSpeed) this.vel.multiplyScalar(this.maxSpeed / v);
     this.vel.multiplyScalar(0.986);
-    this.rig.position.addScaledVector(this.vel, dt);
-    this.applyFloatingOriginIfNeeded();
-    this.applyTerrainConstraint(dt);
+    this.moveWithCollision(dt);
 
     // Nivel de empuje para llamas y audio
     this.boosting = !!boost;
@@ -415,24 +420,27 @@ export class Player {
     this.throttle = 0;
     this.flightStatus = 'COLAPSO';
 
-    const t = performance.now() * 0.001;
     const shake = Math.max(0.02, this.collapseTimer * 0.012);
-    this.camera.position.set(
-      this.chaseCam.x + Math.sin(t * 28) * shake,
-      this.chaseCam.y + Math.cos(t * 31) * shake,
-      this.chaseCam.z
-    );
-    this.camera.lookAt(this.chaseLook);
+    this.positionChaseCamera(shake, 28, 31);
 
     if (this.collapseTimer <= 0) {
       const safe = this.terrainProvider?.getSafeSpawnNear?.(this.collapseSample) || this.terrainProvider?.getSafeSpawn?.();
       if (safe) this.rig.position.copy(safe);
+      this.rig.rotation.set(0, 0, 0);
+      this.shipYaw = 0;
+      this.shipPitch = -0.08;
+      this.shipRoll = 0;
+      this.input.yaw = 0;
+      this.input.pitch = -0.08;
+      const euler0 = new THREE.Euler(this.shipPitch, this.shipYaw, 0, 'YXZ');
+      this.rig.quaternion.setFromEuler(euler0);
       this.vel.set(0, 0, -0.45);
       this.hull = 0.55;
       this.flightStatus = 'REINICIO';
       this.statusEvent = 'Nave recuperada en una orbita segura.';
       this.collapseSample = null;
       this.input.keys = {};
+      this.positionChaseCamera();
     }
   }
 
@@ -462,6 +470,29 @@ export class Player {
     this.hazard = sample.hazard || 'none';
     this.hazardLevel = sample.hazardLevel || 0;
     return sample;
+  }
+
+  // Avanza la posición en sub-pasos pequeños (en vez de un único salto grande)
+  // y comprueba colisión/atmósfera después de cada uno. A 600 u/s con dt~0.05
+  // un solo salto mide 30 unidades: más que el radio de cualquier planeta o
+  // gigante gaseoso, así que la nave podía "atravesarlos" sin que la física
+  // llegara a evaluarse dentro de su volumen. Con sub-pasos de ~1.5 unidades
+  // ninguna velocidad realista puede saltarse un cuerpo por completo.
+  moveWithCollision(dt) {
+    if (!this.terrainProvider) {
+      this.rig.position.addScaledVector(this.vel, dt);
+      this.applyFloatingOriginIfNeeded();
+      return;
+    }
+    const distance = this.vel.length() * dt;
+    const steps = Math.min(24, Math.max(1, Math.ceil(distance / 1.5)));
+    const subDt = dt / steps;
+    for (let i = 0; i < steps; i++) {
+      this.rig.position.addScaledVector(this.vel, subDt);
+      this.applyFloatingOriginIfNeeded();
+      this.applyTerrainConstraint(subDt);
+      if (this.collapseTimer > 0) break; // colisión fatal: no seguir avanzando este cuadro
+    }
   }
 
   applyTerrainConstraint(dt = 0) {
@@ -522,11 +553,17 @@ export class Player {
       return;
     }
 
+    // Un gigante gaseoso no tiene superficie sólida, pero su atmósfera se
+    // vuelve tan densa cerca del núcleo que en la práctica es infranqueable:
+    // el arrastre crece con el cuadrado de la presión hasta frenar casi toda
+    // la velocidad, y una fuerza de "flotación" hacia afuera evita que la
+    // nave se quede flotando (o siga de largo) en el interior.
     const inward = this.vel.dot(sample.normal);
-    const drag = THREE.MathUtils.lerp(0.995, 0.72, pressure);
+    const drag = THREE.MathUtils.lerp(0.985, 0.05, pressure * pressure);
     this.vel.multiplyScalar(Math.pow(drag, Math.max(dt * 60, 1)));
-    if (inward < 0) this.vel.addScaledVector(sample.normal, -inward * pressure * 0.18);
-    this.hull = Math.max(0, this.hull - dt * pressure * pressure * 0.18);
+    if (inward < 0) this.vel.addScaledVector(sample.normal, -inward * (0.5 + pressure * 0.5));
+    this.vel.addScaledVector(sample.normal, pressure * pressure * 12 * dt);
+    this.hull = Math.max(0, this.hull - dt * (0.05 + pressure * pressure * 0.5));
     this.flightStatus = pressure > 0.72 ? 'PRESION CRITICA' : 'ATMOSFERA DENSA';
     if (this.hull <= 0.04) this.triggerCollapse(sample, 'La nave colapso por presion de gigante gaseoso.');
   }
@@ -552,6 +589,11 @@ export class Player {
     this.flightStatus = 'COLAPSO';
     this.statusEvent = reason;
     this.input.keys = {};
+    // Frena de golpe el impulso que traía la nave: sin esto, un impacto a alta
+    // velocidad dejaba el colapso con la inercia previa casi intacta y la nave
+    // seguía "atravesando" el cuerpo (a cientos de u/s) durante toda la
+    // animación de ~2.8 s antes de teletransportarse a la zona segura.
+    this.vel.multiplyScalar(0.12);
     const outward = sample.normal?.clone?.() || new THREE.Vector3(0, 1, 0);
     this.vel.addScaledVector(outward.normalize(), 8);
   }
