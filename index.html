@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GOD-SIZED UNIVERSE — Orion Flight</title>
-  <link rel="stylesheet" href="./css/base.css?v=facts1" />
+  <link rel="stylesheet" href="./css/base.css?v=lesson2" />
   <link rel="stylesheet" href="./css/hud.css?v=speedo" />
 </head>
 <body>
@@ -240,6 +240,50 @@
     <button id="bodyNext" class="bs__arrow" title="Siguiente (▶ / D-Pad)">▶</button>
   </div>
 
+  <button id="lessonLaunch" class="lesson-launch hidden">▶ LECCIÓN GUIADA: MOVIMIENTO DE LA TIERRA</button>
+
+  <div id="lessonDiagram" class="lesson-diagram hidden">
+    <span class="lesson-diagram__eyebrow">DIAGRAMA · SOL–TIERRA</span>
+    <svg viewBox="0 0 280 190" class="lesson-diagram__svg">
+      <ellipse cx="150" cy="95" rx="100" ry="58" class="lg-orbit" />
+      <circle cx="70" cy="95" r="15" class="lg-sun" />
+      <circle cx="250" cy="95" r="6" class="lg-earth" />
+      <line x1="70" y1="95" x2="250" y2="95" class="lg-vec lg-vec--r" />
+      <text x="150" y="86" class="lg-label lg-label--r">r</text>
+      <line x1="250" y1="95" x2="203" y2="95" class="lg-vec lg-vec--f" marker-end="url(#lgArrowF)" />
+      <text x="220" y="112" class="lg-label lg-label--f">F</text>
+      <line x1="250" y1="95" x2="250" y2="48" class="lg-vec lg-vec--v" marker-end="url(#lgArrowV)" />
+      <text x="257" y="58" class="lg-label lg-label--v">v</text>
+      <defs>
+        <marker id="lgArrowF" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" class="lg-arrowhead lg-arrowhead--f" />
+        </marker>
+        <marker id="lgArrowV" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" class="lg-arrowhead lg-arrowhead--v" />
+        </marker>
+      </defs>
+    </svg>
+    <div class="lesson-diagram__legend">
+      <span class="lg-legend lg-legend--r">r · posición</span>
+      <span class="lg-legend lg-legend--f">F · fuerza</span>
+      <span class="lg-legend lg-legend--v">v · velocidad</span>
+    </div>
+  </div>
+
+  <div id="lessonPanel" class="lesson-panel hidden">
+    <div class="lesson-panel__head">
+      <span class="lesson-panel__eyebrow">LECCIÓN GUIADA</span>
+      <strong id="lessonStepTitle">Introducción</strong>
+      <button id="lessonClose" class="lesson-panel__close" title="Salir de la lección">×</button>
+    </div>
+    <div class="lesson-panel__controls">
+      <button id="lessonPrev" title="Paso anterior">◀</button>
+      <button id="lessonPlayPause" title="Pausar / reanudar">❚❚</button>
+      <button id="lessonNext" title="Siguiente paso">▶</button>
+      <div id="lessonDots" class="lesson-panel__dots"></div>
+    </div>
+  </div>
+
   <div id="fade" class="fade hidden"></div>
 
   <div id="cinematic" class="cinematic hidden">
@@ -271,6 +315,6 @@
     }
   }
   </script>
-  <script type="module" src="./js/main.js?v=glass8"></script>
+  <script type="module" src="./js/main.js?v=lesson1"></script>
 </body>
 </html>
