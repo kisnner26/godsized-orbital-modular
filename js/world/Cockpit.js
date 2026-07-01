@@ -250,12 +250,16 @@ export class Cockpit {
   }
 
   // El hueco del parabrisas en el modelo de la cabina está completamente
-  // vacío (sin geometría ni material ahí, se ve directo al vacío). Medido
-  // por raycasting contra el modelo: la abertura ocupa x∈[-0.57,0.56],
-  // y∈[0.05,0.42], con el borde del marco alrededor de z≈0.45-0.5 (espacio
-  // local del GLB, antes de aplicar la escala/posición de la cabina). Como
-  // este cristal se agrega como hijo del propio modelo, hereda su escala,
-  // posición y rotación automáticamente.
+  // vacío (sin geometría ni material ahí, se ve directo al vacío) y tiene
+  // forma de cúpula: ancho a media altura y estrecho arriba/abajo. Medido
+  // por barrido de raycasting (pitch -10°..22°, yaw ±38° desde la cámara
+  // real) contra la única malla sólida de la cabina: en espacio local del
+  // GLB la abertura ocupa x∈[-0.49,0.49], y∈[-0.05,0.42] (centro≈0.185,
+  // ancho≈0.99, alto≈0.46) — el doble de alto que la primera medición, que
+  // dejaba un hueco visible arriba. El cristal es un plano recto (no la
+  // cúpula real), así que se agranda un poco de más: donde sobra, la propia
+  // cúpula del marco (más cerca de la cámara en las esquinas altas) lo tapa
+  // por delante gracias al depth test normal.
   buildWindshieldGlass(cockpitRoot) {
     const glassMat = new THREE.MeshStandardMaterial({
       color: 0xbfefff,
@@ -273,8 +277,8 @@ export class Cockpit {
     // local de la cabina — así el cristal encaja en el hueco tal como se ve
     // desde dentro, sea cual sea la escala/posición/rotación que se le
     // aplique luego a la cabina completa.
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.68, 0.24, 8, 4), glassMat);
-    glass.position.set(0, 0.2535, -0.7615);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(1.06, 0.52, 12, 6), glassMat);
+    glass.position.set(0, 0.185, -0.78);
     glass.rotation.x = -0.58;
     glass.renderOrder = 2;
     cockpitRoot.add(glass);
@@ -302,7 +306,7 @@ export class Cockpit {
       depthWrite: false,
       side: THREE.DoubleSide
     });
-    const rim = new THREE.Mesh(new THREE.PlaneGeometry(0.70, 0.26, 8, 4), rimMat);
+    const rim = new THREE.Mesh(new THREE.PlaneGeometry(1.08, 0.54, 12, 6), rimMat);
     rim.position.copy(glass.position);
     rim.rotation.copy(glass.rotation);
     rim.renderOrder = 1;
