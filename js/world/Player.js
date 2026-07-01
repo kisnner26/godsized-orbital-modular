@@ -7,6 +7,9 @@ const up = new THREE.Vector3(0, 1, 0);
 const cameraTarget = new THREE.Vector3();
 const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();
+const footBasis = new THREE.Matrix4();
+const footYawQuat = new THREE.Quaternion();
+const footEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 
 export class Player {
   constructor(camera, input) {
@@ -68,6 +71,17 @@ export class Player {
     this.approachFinished = false;
     this.observation = null;
     this.preObservation = null;
+
+    // ---- Exploración a pie (aterrizar y caminar sobre un planeta rocoso) ----
+    this.footPos = new THREE.Vector3();
+    this.footUp = new THREE.Vector3(0, 1, 0);
+    this.footForward = new THREE.Vector3(0, 0, -1);
+    this.footRight = new THREE.Vector3(1, 0, 0);
+    this.footPitch = 0;
+    this.footVelY = 0;      // velocidad radial (saltos), a lo largo de footUp
+    this.footGrounded = true;
+    this.footEyeHeight = 0.34;
+    this.parkedShip = null; // { position, quaternion } — dónde quedó la nave al aterrizar
   }
 
   update(dt) {
@@ -75,10 +89,11 @@ export class Player {
     else if (this.mode === 'intro') this.updateIntro(dt);
     else if (this.mode === 'approach') this.updateApproach(dt);
     else if (this.mode === 'observe') this.updateObservation(dt);
+    else if (this.mode === 'onfoot') this.updateOnFoot(dt);
     else this.updateFlight(dt);
 
     this.speedMetersPerSecond = this.speed * 8;
-    if (this.mode !== 'flight') this.updateTerrainTelemetry();
+    if (this.mode !== 'flight' && this.mode !== 'onfoot') this.updateTerrainTelemetry();
   }
 
   // Cinemática de abordaje en primera persona: el astronauta flota hacia la
@@ -458,16 +473,152 @@ export class Player {
     this.maxSpeed = THREE.MathUtils.clamp(Number(maxSpeed) || 18, 3, 600);
   }
 
-  // Activa/desactiva el turbo (quintuplica el tope de velocidad). Solo tiene
-  // efecto pilotando la nave, nunca en observación ni en las cinemáticas.
-  toggleTurbo() {
-    if (this.mode !== 'flight') return;
-    this.turboActive = !this.turboActive;
+  // Turbo de "mantener pulsado" (quintuplica el tope de velocidad): activo
+  // mientras la tecla/botón siga presionado, sin límite de tiempo, y se
+  // apaga en el instante en que se suelta. Solo tiene efecto pilotando la
+  // nave, nunca en observación ni en las cinemáticas.
+  setTurbo(held) {
+    this.turboActive = this.mode === 'flight' && !!held;
   }
 
   setTerrainProvider(provider) {
     this.terrainProvider = provider;
     this.updateTerrainTelemetry();
+  }
+
+  // Se puede aterrizar cuando la nave ya está posada y casi quieta sobre
+  // suelo rocoso (this.flightStatus llega a 'CONTACTO' en applyTerrainConstraint
+  // apenas la nave toca y frena contra la superficie — ver más abajo).
+  canLand() {
+    return this.mode === 'flight' && this.gameplayMode === 'free'
+      && this.flightStatus === 'CONTACTO' && this.speed < 6 && !!this.terrainProvider;
+  }
+
+  // Aparca la nave donde está (queda un marcador visual fijo en el mundo,
+  // ver Cockpit.showLandedMarker) y pasa el control a un personaje a pie
+  // que camina sobre la curvatura real del planeta.
+  land() {
+    if (!this.canLand()) return false;
+    const sample = this.terrainProvider.sampleTerrain(this.rig.position);
+    this.parkedShip = { position: this.rig.position.clone(), quaternion: this.rig.quaternion.clone() };
+
+    this.footUp.copy(sample.normal);
+    forward.set(0, 0, -1).applyQuaternion(this.rig.quaternion);
+    this.footForward.copy(forward).addScaledVector(this.footUp, -forward.dot(this.footUp));
+    if (this.footForward.lengthSq() < 1e-6) this.footForward.set(1, 0, 0);
+    this.footForward.normalize();
+    this.footRight.crossVectors(this.footForward, this.footUp).normalize();
+
+    // Sale caminando unos pasos por delante de la nave (no justo debajo del
+    // casco) y ya apoyado en el suelo real a la altura de los ojos, en vez
+    // de aparecer flotando y caer los primeros cuadros.
+    const stepOut = this.rig.position.clone().addScaledVector(this.footForward, 5.5);
+    const groundSample = this.terrainProvider.sampleTerrain(stepOut);
+    this.footPos.copy(groundSample.center).addScaledVector(groundSample.normal, groundSample.surfaceRadius + this.footEyeHeight);
+    this.footUp.copy(groundSample.normal);
+    this.footRight.crossVectors(this.footForward, this.footUp).normalize();
+    this.footForward.crossVectors(this.footUp, this.footRight).normalize();
+
+    this.footPitch = 0;
+    this.footVelY = 0;
+    this.footGrounded = true;
+    this.vel.set(0, 0, 0);
+    this.speed = 0;
+    this.mode = 'onfoot';
+    this.flightStatus = 'A PIE';
+    return true;
+  }
+
+  // Se puede volver a abordar estando a pie y cerca de donde quedó la nave.
+  canBoard() {
+    if (this.mode !== 'onfoot' || !this.parkedShip) return false;
+    return this.footPos.distanceTo(this.parkedShip.position) < 5.5;
+  }
+
+  board() {
+    if (!this.canBoard()) return false;
+    this.rig.position.copy(this.parkedShip.position);
+    this.rig.quaternion.copy(this.parkedShip.quaternion);
+    footEuler.setFromQuaternion(this.rig.quaternion, 'YXZ');
+    this.shipYaw = footEuler.y;
+    this.shipPitch = footEuler.x;
+    this.shipRoll = 0;
+    this.input.yaw = this.shipYaw;
+    this.input.pitch = this.shipPitch;
+    this.vel.set(0, 0, 0);
+    this.parkedShip = null;
+    this.mode = 'flight';
+    this.positionChaseCamera();
+    return true;
+  }
+
+  // Camina sobre la superficie curva del planeta: la base tangente
+  // (forward/right/up) se reortogonaliza cada cuadro contra la normal
+  // actual, así que un paseo largo no se desalinea aunque el terreno se
+  // vaya inclinando poco a poco bajo los pies. El giro (flechas) rota esa
+  // base alrededor de footUp; W/S/A/D se mueven a lo largo de ella.
+  updateOnFoot(dt) {
+    if (!this.terrainProvider) { this.mode = 'flight'; return; }
+    const k = this.input.keys;
+    const turn = 1.7 * dt;
+    if (k.ArrowLeft) this.rotateFootYaw(turn);
+    if (k.ArrowRight) this.rotateFootYaw(-turn);
+    if (k.ArrowUp) this.footPitch = Math.min(1.15, this.footPitch + 1.1 * dt);
+    if (k.ArrowDown) this.footPitch = Math.max(-1.15, this.footPitch - 1.1 * dt);
+
+    // Reortogonaliza contra la normal del cuadro anterior (evita que forward
+    // deje de ser tangente si footUp cambió al caminar por terreno curvo).
+    this.footRight.crossVectors(this.footForward, this.footUp).normalize();
+    this.footForward.crossVectors(this.footUp, this.footRight).normalize();
+
+    const sampleNow = this.terrainProvider.sampleTerrain(this.footPos);
+    const gravity = Math.max(0.15, sampleNow.gravity || 1) * 5.4;
+    const run = k.ShiftLeft || k.ShiftRight;
+    const walkSpeed = 2.5 * (run ? 1.7 : 1);
+    const moveX = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
+    const moveZ = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0);
+    let mx = moveX, mz = moveZ;
+    const mlen = Math.hypot(mx, mz);
+    if (mlen > 1) { mx /= mlen; mz /= mlen; }
+    this.footPos.addScaledVector(this.footRight, mx * walkSpeed * dt);
+    this.footPos.addScaledVector(this.footForward, mz * walkSpeed * dt);
+    this.speed = Math.hypot(mx, mz) * walkSpeed;
+
+    if (k.Space && this.footGrounded) {
+      this.footVelY = Math.sqrt(2 * gravity * 1.1);
+      this.footGrounded = false;
+    }
+    this.footVelY -= gravity * dt;
+    this.footPos.addScaledVector(this.footUp, this.footVelY * dt);
+
+    const sample = this.terrainProvider.sampleTerrain(this.footPos);
+    const groundRadius = sample.surfaceRadius + this.footEyeHeight;
+    const radial = this.footPos.distanceTo(sample.center);
+    if (radial <= groundRadius) {
+      this.footPos.copy(sample.center).addScaledVector(sample.normal, groundRadius);
+      this.footVelY = 0;
+      this.footGrounded = true;
+    } else {
+      this.footGrounded = false;
+    }
+    this.footUp.copy(sample.normal);
+
+    this.altitudeMeters = 0;
+    this.biome = sample.biome;
+    this.insideAtmosphere = sample.insideAtmosphere;
+    this.flightStatus = this.footGrounded ? 'A PIE' : 'SALTANDO';
+
+    this.rig.position.copy(this.footPos);
+    footBasis.makeBasis(this.footRight, this.footUp, tmp.copy(this.footForward).negate());
+    this.rig.quaternion.setFromRotationMatrix(footBasis);
+    this.camera.position.set(0, 0, 0);
+    this.camera.rotation.set(this.footPitch, 0, 0);
+  }
+
+  rotateFootYaw(angle) {
+    footYawQuat.setFromAxisAngle(this.footUp, angle);
+    this.footForward.applyQuaternion(footYawQuat);
+    this.footRight.applyQuaternion(footYawQuat);
   }
 
   updateTerrainTelemetry() {

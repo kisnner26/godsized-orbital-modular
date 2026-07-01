@@ -13,7 +13,7 @@ export class GamepadController {
     this.id = '';
     this.connected = false;
     this.prev = [];          // estado previo de botones (flanco)
-    this.mappedKeys = ['KeyW','KeyS','KeyA','KeyD','Space','ControlLeft','ShiftLeft'];
+    this.mappedKeys = ['KeyW','KeyS','KeyA','KeyD','Space','ControlLeft','ShiftLeft','KeyM'];
 
     window.addEventListener('gamepadconnected', (e) => {
       const gp = e.gamepad;
@@ -86,8 +86,8 @@ export class GamepadController {
       k.Space = this.pressed(gp, 3);                         // Triángulo (subir)
       k.ControlLeft = this.pressed(gp, 2);                   // Cuadrado (bajar)
       k.ShiftLeft = this.pressed(gp, 10);                    // L3 (impulso)
+      k.KeyM = this.pressed(gp, 11);                         // R3 (turbo x5, mantener)
 
-      if (this.edge(gp, 11)) this.actions.toggleTurbo?.();   // R3 (turbo x5)
       if (this.edge(gp, 12)) this.actions.speedUp?.();       // D-pad arriba
       if (this.edge(gp, 13)) this.actions.speedDown?.();     // D-pad abajo
       if (this.edge(gp, 9)) this.actions.togglePanel?.();    // Options

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ProceduralPlanet } from './ProceduralPlanet.js';
+import { ProceduralPlanet } from './ProceduralPlanet.js?v=cullfix1';
 
 const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();

@@ -112,9 +112,9 @@ export class GuidedLesson {
     this.active = false;
     this.paused = false;
     this.index = -1;
-    this.timer = 0;
-    this.stepDuration = 0;
     this.zoomTarget = 1;
+    this.advanceTimer = null;
+    this.pendingAdvance = false;
 
     dotsEl.innerHTML = STEPS.map(() => '<span></span>').join('');
     this.dots = [...dotsEl.children];
@@ -157,6 +157,8 @@ export class GuidedLesson {
   stop(keepButtonHidden = false) {
     if (!this.active) return;
     this.active = false;
+    clearTimeout(this.advanceTimer);
+    this.pendingAdvance = false;
     document.body.classList.remove('lesson-active');
     this.restoreEarthTarget();
     this.panel.classList.add('hidden');
@@ -177,19 +179,50 @@ export class GuidedLesson {
   togglePause() {
     this.paused = !this.paused;
     this.playPauseBtn.textContent = this.paused ? '▶' : '❚❚';
+    if (this.paused) {
+      clearTimeout(this.advanceTimer);
+    } else if (this.pendingAdvance) {
+      // La narración ya había terminado mientras estaba en pausa.
+      this.pendingAdvance = false;
+      this.scheduleAdvance();
+    }
   }
 
   clearEqHighlight() {
     document.querySelectorAll('.eq.lesson-highlight').forEach(el => el.classList.remove('lesson-highlight'));
   }
 
+  // Se llama cuando la narración de un paso termina de leerse DE VERDAD
+  // (evento real del navegador, no un cronómetro adivinado). `i` es el paso
+  // que estaba activo cuando se pidió esa narración: si el usuario ya
+  // avanzó/retrocedió manualmente mientras tanto, `i !== this.index` y no
+  // hacemos nada (esa narración vieja ya fue interrumpida de todos modos).
+  onNarrationEnd(i) {
+    if (!this.active || i !== this.index) return;
+    if (this.paused) { this.pendingAdvance = true; return; }
+    this.scheduleAdvance();
+  }
+
+  // Pequeña pausa tras terminar de leer antes de avanzar — da tiempo a que
+  // el paso "respire" en vez de saltar en el instante exacto en que calla.
+  scheduleAdvance() {
+    clearTimeout(this.advanceTimer);
+    this.advanceTimer = setTimeout(() => {
+      if (this.active && !this.paused) this.goTo(this.index + 1);
+    }, 900);
+  }
+
   goTo(i) {
     if (i < 0) i = 0;
     if (i >= STEPS.length) { this.stop(); return; }
+    clearTimeout(this.advanceTimer);
+    this.pendingAdvance = false;
+    // Al cambiar de paso (incluso a mitad de una narración anterior, si el
+    // usuario navegó a mano) se corta esa narración de inmediato en vez de
+    // dejarla encolada — este paso siempre se lee desde el principio.
+    this.narrator.interrupt();
     this.index = i;
     const step = STEPS[i];
-    this.timer = 0;
-    this.stepDuration = step.duration;
     this.zoomTarget = step.zoom;
 
     this.titleEl.textContent = step.title;
@@ -198,7 +231,7 @@ export class GuidedLesson {
     if (step.eq) document.getElementById(step.eq)?.classList.add('lesson-highlight');
     this.diagram.className = `lesson-diagram focus-${step.focus}`;
     this.solar.setTimeScale(step.timeScale);
-    this.narrator.say(step.narration, step.duration);
+    this.narrator.say(step.narration, step.duration, () => this.onNarrationEnd(i));
 
     if (step.wide && this.player.observation) {
       this.player.observation.targetGetter = () => this.solar.getSunWorldPosition();
@@ -212,7 +245,5 @@ export class GuidedLesson {
     if (!this.active || this.paused) return;
     const cur = this.player.observeZoom || 1;
     this.player.observeZoom = cur + (this.zoomTarget - cur) * Math.min(1, dt * 1.5);
-    this.timer += dt * 1000;
-    if (this.timer >= this.stepDuration) this.goTo(this.index + 1);
   }
 }
