@@ -16,6 +16,13 @@ export class Input {
     this.onKeyDown = null;
     this.onWheel = null;
 
+    // Entradas analógicas del mando (0 si no hay mando conectado, así el
+    // teclado siempre puede usar el valor de respaldo `|| 0` con seguridad).
+    this.thrustFwd = 0;  // gatillo R2, 0..1 proporcional
+    this.thrustRev = 0;  // gatillo L2, 0..1 proporcional
+    this.gpYaw = 0;      // stick derecho (a pie), rad/s
+    this.gpPitch = 0;    // stick derecho (a pie), rad/s
+
     document.addEventListener('wheel', e => {
       if (this.onWheel) this.onWheel(e.deltaY);
     }, { passive: true });
