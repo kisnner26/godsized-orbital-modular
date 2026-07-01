@@ -72,6 +72,8 @@ export class Player {
     this.chaseLook = new THREE.Vector3(0, 0.35, -3.5);
     this.explorationChaseCam = new THREE.Vector3(0, 4.9, 22.5);
     this.explorationChaseLook = new THREE.Vector3(0, 0.18, -2.2);
+    this.footChaseCam = new THREE.Vector3(0, 0.16, 0.95);
+    this.footChaseLook = new THREE.Vector3(0, 0.1, -0.4);
 
     this.firstPerson = false;                    // vista de cabina (FPS)
     this.fpCam = new THREE.Vector3(0, 1.55, -0.15); // posición del ojo del piloto
@@ -91,6 +93,9 @@ export class Player {
     this.footGrounded = true;
     this.footEyeHeight = 0.34;
     this.parkedShip = null; // { position, quaternion } — dónde quedó la nave al aterrizar
+    this.onLand = null;   // callback: entrada automática a la superficie completada
+    this.onBoard = null;  // callback: de vuelta a bordo completada
+    this.activeAutoLandBody = null; // qué cuerpo de FreeExploration se está explorando a pie
   }
 
   update(dt) {
@@ -466,6 +471,21 @@ export class Player {
       this.lightSpeedBeta = 0;
       this.lightSpeedGamma = 1;
     }
+
+    this.checkAutoLand();
+  }
+
+  // Entrada automática a la superficie: cruzar la atmósfera de un planeta
+  // rocoso basta, sin acercarse con cuidado ni pulsar ninguna tecla.
+  checkAutoLand() {
+    if (this.gameplayMode !== 'free' || !this.terrainProvider?.findNearestBody) return;
+    const body = this.terrainProvider.findNearestBody(this.rig.position);
+    if (!body || body.kind !== 'rocky') return;
+    body.group.getWorldPosition(tmp);
+    if (tmp.distanceTo(this.rig.position) < body.atmosphereRadius) {
+      this.activeAutoLandBody = body;
+      this.land();
+    }
   }
 
   toggleLightSpeed() {
@@ -535,33 +555,40 @@ export class Player {
     this.updateTerrainTelemetry();
   }
 
-  // Se puede aterrizar cuando la nave ya está posada y casi quieta sobre
-  // suelo rocoso (this.flightStatus llega a 'CONTACTO' en applyTerrainConstraint
-  // apenas la nave toca y frena contra la superficie — ver más abajo).
+  // Entrada automática (ver checkAutoLand): basta con estar volando en
+  // Exploración con un proveedor de terreno, sin exigir velocidad baja ni
+  // contacto previo con el suelo — land() ya resuelve la superficie real
+  // sea cual sea la altura de la nave en el momento de disparar.
   canLand() {
-    return this.mode === 'flight' && this.gameplayMode === 'free'
-      && this.flightStatus === 'CONTACTO' && this.speed < 6 && !!this.terrainProvider;
+    return this.mode === 'flight' && this.gameplayMode === 'free' && !!this.terrainProvider;
   }
 
-  // Aparca la nave donde está (queda un marcador visual fijo en el mundo,
-  // ver Cockpit.showLandedMarker) y pasa el control a un personaje a pie
-  // que camina sobre la curvatura real del planeta.
+  // Aparca la nave sobre el terreno real bajo su trayectoria actual (queda
+  // un marcador visual fijo en el mundo, ver Cockpit.showLandedMarker) y
+  // pasa el control a un personaje a pie que camina sobre la curvatura real
+  // del planeta. Como la entrada es automática (basta con cruzar la
+  // atmósfera, ver checkAutoLand), la nave puede estar todavía en pleno
+  // vuelo/altura cuando esto se dispara: por eso el "aparcado" no usa
+  // this.rig.position tal cual, sino la superficie real bajo ese punto.
   land() {
     if (!this.canLand()) return false;
-    const sample = this.terrainProvider.sampleTerrain(this.rig.position);
-    this.parkedShip = { position: this.rig.position.clone(), quaternion: this.rig.quaternion.clone() };
-
-    this.footUp.copy(sample.normal);
     forward.set(0, 0, -1).applyQuaternion(this.rig.quaternion);
+    const shipGround = this.terrainProvider.sampleTerrain(this.rig.position);
+    const shipRestPos = shipGround.center.clone().addScaledVector(shipGround.normal, shipGround.surfaceRadius + 1.1);
+
+    this.footUp.copy(shipGround.normal);
     this.footForward.copy(forward).addScaledVector(this.footUp, -forward.dot(this.footUp));
     if (this.footForward.lengthSq() < 1e-6) this.footForward.set(1, 0, 0);
     this.footForward.normalize();
     this.footRight.crossVectors(this.footForward, this.footUp).normalize();
 
+    footBasis.makeBasis(this.footRight, this.footUp, tmp2.copy(this.footForward).negate());
+    this.parkedShip = { position: shipRestPos, quaternion: new THREE.Quaternion().setFromRotationMatrix(footBasis) };
+
     // Sale caminando unos pasos por delante de la nave (no justo debajo del
     // casco) y ya apoyado en el suelo real a la altura de los ojos, en vez
     // de aparecer flotando y caer los primeros cuadros.
-    const stepOut = this.rig.position.clone().addScaledVector(this.footForward, 5.5);
+    const stepOut = shipRestPos.clone().addScaledVector(this.footForward, 5.5);
     const groundSample = this.terrainProvider.sampleTerrain(stepOut);
     this.footPos.copy(groundSample.center).addScaledVector(groundSample.normal, groundSample.surfaceRadius + this.footEyeHeight);
     this.footUp.copy(groundSample.normal);
@@ -575,10 +602,13 @@ export class Player {
     this.speed = 0;
     this.mode = 'onfoot';
     this.flightStatus = 'A PIE';
+    this.onLand?.();
     return true;
   }
 
   // Se puede volver a abordar estando a pie y cerca de donde quedó la nave.
+  // A diferencia del aterrizaje (automático), volver a abordar sigue siendo
+  // una acción deliberada del jugador (tecla F junto a la nave aparcada).
   canBoard() {
     if (this.mode !== 'onfoot' || !this.parkedShip) return false;
     return this.footPos.distanceTo(this.parkedShip.position) < 5.5;
@@ -598,6 +628,7 @@ export class Player {
     this.parkedShip = null;
     this.mode = 'flight';
     this.positionChaseCamera();
+    this.onBoard?.();
     return true;
   }
 
@@ -660,8 +691,21 @@ export class Player {
     this.rig.position.copy(this.footPos);
     footBasis.makeBasis(this.footRight, this.footUp, tmp.copy(this.footForward).negate());
     this.rig.quaternion.setFromRotationMatrix(footBasis);
-    this.camera.position.set(0, 0, 0);
-    this.camera.rotation.set(this.footPitch, 0, 0);
+    if (this.firstPerson) {
+      // Primera persona a pie: solo cámara, nada de cuerpo/manos a la vista
+      // (el modelo del astronauta se oculta por completo, ver Cockpit.applyFootView).
+      this.camera.position.set(0, 0, 0);
+      this.camera.rotation.set(this.footPitch, 0, 0);
+    } else {
+      // Tercera persona: se ve el modelo 3D completo del astronauta. El
+      // punto al que mira la cámara es LOCAL al rig (igual que la nave, ver
+      // positionChaseCamera): hay que convertirlo a mundo antes de lookAt()
+      // o la cámara apuntaría hacia el origen absoluto en vez de al personaje.
+      this.camera.position.copy(this.footChaseCam);
+      tmp2.copy(this.footChaseLook);
+      tmp2.y += this.footPitch * 0.6;
+      this.camera.lookAt(this.rig.localToWorld(cameraTarget.copy(tmp2)));
+    }
   }
 
   rotateFootYaw(angle) {

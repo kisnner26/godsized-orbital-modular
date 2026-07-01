@@ -104,6 +104,19 @@
     <div class="lightspeed__row"><span>TIEMPO UNIVERSO</span><strong id="lsCoord">00:00.0</strong></div>
   </div>
 
+  <!-- Radio de a bordo: rock de los 90, emisoras de internet reales via radio-browser.info -->
+  <div id="shipRadio" class="radio hidden">
+    <div class="radio__row">
+      <button id="radioToggle" class="radio__play" title="Reproducir / Pausar">▶</button>
+      <div class="radio__info">
+        <span class="radio__eyebrow">RADIO ORION <span id="radioDot" class="radio__dot"></span></span>
+        <strong id="radioStation">Sintonizando…</strong>
+      </div>
+      <button id="radioNext" class="radio__next" title="Siguiente emisora">»</button>
+    </div>
+    <input id="radioVolume" type="range" min="0" max="100" value="45" title="Volumen de la radio">
+  </div>
+
   <!-- Menú de ajustes (se abre con ESC). Pausa la simulación. -->
   <section id="settingsMenu" class="settings hidden" aria-label="Ajustes">
     <div class="settings__panel" role="dialog" aria-modal="true">
@@ -339,6 +352,6 @@
     }
   }
   </script>
-  <script type="module" src="./js/main.js?v=v2final"></script>
+  <script type="module" src="./js/main.js?v=surface1final"></script>
 </body>
 </html>

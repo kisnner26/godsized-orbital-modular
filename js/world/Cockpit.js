@@ -408,6 +408,29 @@ export class Cockpit {
     this.buildThrusters(shipRig);
     this.buildInteriorLights(shipRig);
     this.buildTurboTrail();
+    await this.loadAstronaut(shipRig);
+  }
+
+  // Astronauta a pie (tercera persona): mismo rig que la nave (Player usa un
+  // único this.rig tanto para volar como para caminar), así que basta con
+  // colgarlo del mismo shipRig y alternar su visibilidad. En primera persona
+  // a pie no debe verse nada del cuerpo (solo la cámara), así que este
+  // modelo se oculta por completo en ese caso — ver Player.updateOnFoot.
+  async loadAstronaut(shipRig) {
+    try {
+      const astro = await this.loader.load('astronauta EVA', './assets/models/astronaut_avatar.glb');
+      this.loader.normalize(astro, 0.42);
+      astro.name = 'ONFOOT_ASTRONAUT_MODEL';
+      astro.position.set(0, -0.34, 0);
+      astro.visible = false;
+      astro.traverse(o => {
+        if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+      });
+      shipRig.add(astro);
+      this.astronaut = astro;
+    } catch (err) {
+      console.warn('No se pudo cargar el modelo del astronauta a pie:', err);
+    }
   }
 
   buildThirdPersonProxy(shipRig) {
@@ -523,7 +546,8 @@ export class Cockpit {
   }
 
   // A pie: la cámara ya no es la nave, así que se ocultan cabina, brazos,
-  // nave y toberas — solo queda visible el marcador de nave aparcada.
+  // nave y toberas — solo queda visible el marcador de nave aparcada (y,
+  // en tercera persona, el astronauta).
   startOnFoot() {
     if (this.cockpit) this.cockpit.visible = false;
     if (this.arms) this.arms.visible = false;
@@ -531,6 +555,14 @@ export class Cockpit {
     if (this.shipProxy) this.shipProxy.visible = false;
     if (this.thrusters) this.thrusters.visible = false;
     if (this.interiorLights) this.interiorLights.forEach(l => l.intensity = 0);
+    this.onFoot = true;
+  }
+
+  // Primera persona a pie: solo la cámara, nada de cuerpo a la vista (ni
+  // manos ni nada). Tercera persona: se ve el modelo 3D completo del
+  // astronauta, que ya cuelga del mismo rig que controla Player.
+  applyFootView(firstPerson) {
+    if (this.astronaut) this.astronaut.visible = !!this.onFoot && !firstPerson;
   }
 
   update(dt, player) {

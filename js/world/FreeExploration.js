@@ -54,6 +54,8 @@ export class FreeExploration {
     this.markers.visible = false;
     this.scene.add(this.markers);
     this.activePlanet = null;
+    this.surfaceBody = null;      // cuerpo activo en modo superficie (o null en vuelo libre)
+    this.surfaceBodyPrevMaxLevel = 4;
     this.metersPerUnit = 1000;
     this.telemetry = {
       altitudeMeters: 0,
@@ -91,6 +93,7 @@ export class FreeExploration {
 
   exit(player) {
     this.enabled = false;
+    if (this.surfaceBody) this.exitSurfaceMode();
     for (const system of this.systems) system.group.visible = false;
     for (const body of this.bodies) body.group.visible = false;
     this.markers.visible = false;
@@ -101,6 +104,34 @@ export class FreeExploration {
     player.lightSpeedGamma = 1;
     player.properTime = 0;
     player.coordinateTime = 0;
+  }
+
+  // Al entrar a la superficie de un planeta se oculta TODO lo demás (otros
+  // sistemas, otros planetas, las balizas de navegación): solo queda activo
+  // ese planeta, que además puede permitirse mucho más nivel de detalle al
+  // ser el único cuerpo procedural cargándose. Así no se acumulan en memoria
+  // ni GPU los demás sistemas mientras se explora a pie.
+  enterSurfaceMode(body) {
+    if (!body || body.kind !== 'rocky' || this.surfaceBody) return;
+    this.surfaceBody = body;
+    for (const system of this.systems) system.group.visible = false;
+    for (const b of this.bodies) b.group.visible = (b === body);
+    this.markers.visible = false;
+    this.surfaceBodyPrevMaxLevel = body.planet.maxLevel;
+    body.planet.maxLevel = Math.max(body.planet.maxLevel, 7);
+  }
+
+  // Al volver a despegar se restauran los demás sistemas/planetas (vuelven
+  // a construirse las texturas/chunks bajo demanda según la cámara se
+  // acerque, igual que la primera vez) y el detalle del planeta vuelto a
+  // su nivel normal para no penalizar el resto del vuelo.
+  exitSurfaceMode() {
+    if (!this.surfaceBody) return;
+    for (const system of this.systems) system.group.visible = true;
+    for (const b of this.bodies) b.group.visible = true;
+    this.markers.visible = true;
+    this.surfaceBody.planet.maxLevel = this.surfaceBodyPrevMaxLevel;
+    this.surfaceBody = null;
   }
 
   build() {
@@ -226,7 +257,7 @@ export class FreeExploration {
   }
 
   createGasGiant(spec, position, systemSpec) {
-    const radius = Math.max(15, Math.sqrt(spec.radiusKm / EARTH_RADIUS_KM) * 8.2);
+    const radius = Math.max(30, Math.sqrt(spec.radiusKm / EARTH_RADIUS_KM) * 17);
     const atmosphereRadius = radius * 2.15;
     const group = new THREE.Group();
     group.name = `EXPLORABLE_GAS_${spec.name}`;
@@ -340,6 +371,14 @@ export class FreeExploration {
 
   update(dt, player) {
     if (!this.enabled) return;
+    if (this.surfaceBody) {
+      // Modo superficie: solo se actualiza (CPU de LOD + GPU de render) el
+      // planeta activo. El resto del universo queda congelado hasta salir.
+      this.surfaceBody.planet.update(dt);
+      this.activePlanet = this.surfaceBody;
+      this.getTelemetryFor(player.rig.position);
+      return;
+    }
     let nearest = null;
     let nearestScore = Infinity;
     for (const body of this.bodies) {
@@ -604,7 +643,11 @@ function proceduralSystem(name, origin, starRadius, starColor, haloColor, seed) 
 }
 
 function displayRadiusFromKm(radiusKm) {
-  return Math.max(4.2, Math.cbrt(radiusKm / EARTH_RADIUS_KM) * 6.4);
+  // Antes (4.2..6.4) la nave (7.4 de largo) era casi tan grande como el
+  // propio radio del planeta. Los planetas rocosos ahora son mucho más
+  // grandes que la nave, sin tocar la escala de la nave en sí (que también
+  // se usa en modo Sistema Solar) ni las distancias orbitales (AU_UNITS).
+  return Math.max(15, Math.cbrt(radiusKm / EARTH_RADIUS_KM) * 21);
 }
 
 function tintProceduralPlanet(planet, palette, atmosphereColor) {
