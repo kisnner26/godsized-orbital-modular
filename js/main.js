@@ -14,7 +14,7 @@ import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=galaxies1';
 import { HUD } from './ui/HUD.js?v=lightspeed1';
 import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=facts2';
 import { GuidedLesson } from './ui/GuidedLesson.js?v=5';
-import { SystemMap2D } from './ui/SystemMap2D.js?v=2';
+import { SystemMap2D } from './ui/SystemMap2D.js?v=4';
 
 const canvas = document.getElementById('game');
 const boot = document.getElementById('boot');
