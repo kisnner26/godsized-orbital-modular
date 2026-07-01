@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Engine } from './core/Engine.js?v=fps3';
+import { Engine } from './core/Engine.js?v=fps4';
 import { Input } from './systems/Input.js?v=padfeel1';
 import { GamepadController } from './systems/Gamepad.js?v=padfeel2';
 import { ModelLoader } from './systems/ModelLoader.js';
@@ -603,10 +603,13 @@ function applyFps(fps) {
 }
 function getNativeAlignedFpsOptions(hz) {
   const nativeHz = Math.max(24, Math.round(hz || 60));
-  const options = new Set([nativeHz]);
-  for (const div of [2, 3, 4]) {
-    const fps = Math.round(nativeHz / div);
-    if (fps >= 24) options.add(fps);
+  const options = new Set([30, 60, 120, 144, 165, 240]);
+  if (nativeHz >= 50) {
+    options.add(nativeHz);
+    for (const div of [2, 3, 4]) {
+      const fps = Math.round(nativeHz / div);
+      if (fps >= 24) options.add(fps);
+    }
   }
   return [...options].sort((a, b) => a - b);
 }
@@ -643,8 +646,8 @@ function buildFpsOptions(hz) {
   applyFps(currentFpsChoice !== null ? currentFpsChoice : getDefaultFps(nativeHz));
 }
 // Cap conservador desde el primer frame; al medir los Hz reales se reconstruyen
-// opciones alineadas al monitor (mitad/tercio/cuarto/nativo) para evitar
-// saltos irregulares en pantallas de 120/144/165 Hz.
+// opciones comunes hasta 240 FPS, más divisores alineados al monitor
+// (mitad/tercio/cuarto/nativo) para evitar saltos irregulares.
 engine.setTargetFps(currentFpsChoice !== null ? currentFpsChoice : (weakGpu ? 30 : 60));
 let fpsStatusTimer = 0;
 engine.addUpdater(dt => {
