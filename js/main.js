@@ -8,7 +8,7 @@ import { ShipAudio } from './systems/ShipAudio.js?v=esc';
 import { Radio } from './systems/Radio.js?v=1';
 import { Player } from './world/Player.js?v=autoland1';
 import { Cockpit } from './world/Cockpit.js?v=astronaut1';
-import { SolarSystem } from './world/SolarSystem.js?v=moonfix3';
+import { SolarSystem } from './world/SolarSystem.js?v=twoearths1';
 import { FreeExploration } from './world/FreeExploration.js?v=scale1';
 import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=galaxies1';
 import { HUD } from './ui/HUD.js?v=lightspeed1';
@@ -291,6 +291,7 @@ function enterObservation(index) {
   currentBodyIndex = (index + BODY_PRESETS.length) % BODY_PRESETS.length;
   const b = BODY_PRESETS[currentBodyIndex];
   solar.setScenario(b.scenario || 'solar');
+  solar.setObservationMode(true);
   solar.makeSimBody(b.type, b.au, 0, 0, 0, b.v, b.vz || 0, b.look || {});
   fillConditions(b);
 
@@ -356,6 +357,7 @@ function exitObserveMode() {
   setObservationHudCollapsed(false);
   physics.hide();
   solar.setVectorsVisible(false);
+  solar.setObservationMode(false);
   solar.setScenario('solar');
   player.exitObservation();
   cockpit.startFlight();

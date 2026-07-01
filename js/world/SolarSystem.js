@@ -288,6 +288,15 @@ export class SolarSystem {
     this.attractors = [{ mass: M_SUN, x: 0, y: 0, z: 0 }];
     this.scenario = 'solar';
     this.scenarioVisuals = {};   // grupos de visuales por escenario (lazy)
+    this._forceHideWideView = false; // true mientras se observa un cuerpo de cerca
+  }
+
+  // Al observar un cuerpo de cerca (makeSimBody) el sistema completo de
+  // planetas "de vuelo libre" debe ocultarse: si no, se ve el planeta real
+  // de fondo Y la copia cercana creada para la observación al mismo tiempo.
+  setObservationMode(active) {
+    this._forceHideWideView = !!active;
+    this.setScenario(this.scenario);
   }
 
   setTimeScale(s) {
@@ -662,6 +671,11 @@ export class SolarSystem {
     if (this.planets) this.planets.forEach(p => p.pivot.visible = solar);
     if (this.solarExtra) this.solarExtra.forEach(o => o.visible = solar);
     for (const k in this.scenarioVisuals) this.scenarioVisuals[k].visible = false;
+
+    if (this._forceHideWideView) {
+      if (this.planets) this.planets.forEach(p => p.pivot.visible = false);
+      if (this.solarExtra) this.solarExtra.forEach(o => o.visible = false);
+    }
 
     if (solar) {
       this.attractors = [{ mass: M_SUN, x: 0, y: 0, z: 0 }];
