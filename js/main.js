@@ -5,7 +5,7 @@ import { GamepadController } from './systems/Gamepad.js?v=turbo';
 import { ModelLoader } from './systems/ModelLoader.js';
 import { Narrator } from './systems/Narrator.js?v=radio';
 import { ShipAudio } from './systems/ShipAudio.js?v=esc';
-import { Player } from './world/Player.js?v=turbo';
+import { Player } from './world/Player.js?v=turbo5';
 import { Cockpit } from './world/Cockpit.js?v=turbo';
 import { SolarSystem } from './world/SolarSystem.js?v=scenarios2';
 import { FreeExploration } from './world/FreeExploration.js?v=exploration2';
@@ -576,12 +576,12 @@ const HINTS = {
   flight: [
     ['L-Stick / ←→↑↓', 'Girar'], ['R2 / ✕', 'Acelerar'], ['L2 / ◯', 'Frenar'],
     ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Impulso'],
-    ['M / R3', 'Turbo x3'], ['D-Pad ↑↓', 'Velocidad'], ['V', '1ª / 3ª persona'], ['Options', 'Panel']
+    ['M / R3', 'Turbo x5'], ['D-Pad ↑↓', 'Velocidad'], ['V', '1ª / 3ª persona'], ['Options', 'Panel']
   ],
   free: [
     ['L-Stick / ←→↑↓', 'Girar'], ['R2 / ✕', 'Acelerar'], ['L2 / ◯', 'Frenar'],
     ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Impulso'],
-    ['M / R3', 'Turbo x3'], ['V', '1ª / 3ª persona']
+    ['M / R3', 'Turbo x5'], ['V', '1ª / 3ª persona']
   ],
   observe: [
     ['D-Pad ◀ ▶', 'Cambiar cuerpo'], ['Rueda / L2 R2', 'Zoom'], ['◯', 'Salir'], ['C', 'Condiciones']
