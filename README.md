@@ -166,18 +166,20 @@ Modo de vuelo libre sin las barreras del modo anterior: cinco sistemas planetari
 | Tecla | Acción |
 |---|---|
 | `W` `A` `S` `D` | Avanzar / izquierda / retroceder / derecha |
-| Flechas / ratón | Girar la nave |
+| `←` `→` `↑` `↓` | Girar la nave (cámara) |
 | `Space` / `Ctrl` | Subir / bajar |
-| `Shift` | Turbo |
+| `Shift` | Impulso (empuje extra) |
+| `M` | **Turbo** — triplica la velocidad máxima, con llamas azules y estela |
 | `V` | Alternar 1ª / 3ª persona |
 | `C` | Panel de condiciones iniciales (modo Sistema Solar) |
 | `1` / `2` | Observar planeta / cometa |
-| `←` `→` | Cambiar de cuerpo observado |
 | Rueda del ratón | Zoom en observación |
 | `P` | Ajustes (sonido, modo de juego, gráficos) |
 | `Esc` (en observación) | Salir de observación |
 
-También hay soporte completo de **mando PS4/Xbox** (sticks, gatillos, D-Pad) — ver [`js/systems/Gamepad.js`](js/systems/Gamepad.js).
+La cámara/nave se controla únicamente con teclado (o el stick del mando): el ratón/touchpad ya no interviene en el vuelo, porque sin Pointer Lock su `movementX/Y` es errático en touchpads y provocaba saltos de cámara. Las flechas `←` `→` cambian de cuerpo observado dentro del modo observación.
+
+También hay soporte completo de **mando PS4/Xbox** (sticks, gatillos, D-Pad, `R3` para turbo) — ver [`js/systems/Gamepad.js`](js/systems/Gamepad.js).
 
 ---
 
@@ -191,7 +193,7 @@ js/
   main.js                      Orquestador: estados de juego, eventos de UI, bucle principal
   core/Engine.js                Renderer, cámara, EffectComposer + bloom, bucle de render
   systems/
-    Input.js                    Teclado y ratón (sin Pointer Lock, control por movementX/Y)
+    Input.js                    Teclado (la nave se gira solo con flechas/mando) + rueda del ratón para zoom
     Gamepad.js                  Soporte de mando PS4/Xbox
     ModelLoader.js               Carga y normaliza modelos GLTF/GLB
     Narrator.js                  Narración por voz (Web Speech API) + subtítulos
