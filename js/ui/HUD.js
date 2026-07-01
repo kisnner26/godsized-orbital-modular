@@ -10,11 +10,15 @@ export class HUD {
     this.o2 = document.getElementById('o2Readout');
     this.clock = document.getElementById('missionClock');
     this.body = document.getElementById('bodyReadout');
+    this.speedoNeedle = document.getElementById('speedoNeedle');
+    this.speedoValue = document.getElementById('speedoValue');
+    this.speedoTurbo = document.getElementById('speedoTurbo');
   }
   update(dt) {
     this.t += dt;
     const speed = this.player.speedMetersPerSecond ?? this.player.speed * 8;
     this.speed.textContent = this.player.mode === 'observe' ? 'TRAYECTORIA' : `${speed.toFixed(1)} m/s`;
+    this.updateSpeedo(speed);
     const hasTerrain = !!this.player.terrainProvider;
     if (this.altitude) this.altitude.textContent = hasTerrain ? formatMeters(this.player.altitudeMeters ?? this.planet?.telemetry?.altitudeMeters ?? 0) : '-- m';
     if (this.biome) this.biome.textContent = hasTerrain ? (this.player.biome || this.planet?.telemetry?.biome || 'ESPACIO') : 'SISTEMA';
@@ -33,6 +37,26 @@ export class HUD {
     else if (this.player.mode === 'observe') this.body.textContent = this.player.observation?.label || 'CUERPO';
     else if (this.player.mode === 'approach') this.body.textContent = 'SISTEMA SOLAR';
     else this.body.textContent = 'VUELO LIBRE';
+  }
+
+  // Aguja del velocímetro: 0% = -135°, 100% = +135° (barrido de 270°). La
+  // velocidad de crucero real depende del empuje configurado (no del tope
+  // `maxSpeed`, que casi nunca se alcanza — ver Player.updateFlight), así que
+  // una escala fija dejaba la aguja casi plana en vuelo normal. En vez de eso
+  // la escala se auto-calibra al máximo reciente: crece al instante si se
+  // supera, y se relaja despacio, así la aguja siempre usa bien el dial y
+  // "se va a la zona roja" al activar el turbo, sea cual sea el ajuste de
+  // empuje del jugador.
+  updateSpeedo(speedMS) {
+    if (!this.speedoNeedle) return;
+    const raw = this.player.speed || 0;
+    const prevRef = this.speedoRef || 10;
+    this.speedoRef = Math.max(10, raw * 1.15, prevRef * 0.994);
+    const frac = Math.max(0, Math.min(1, raw / this.speedoRef));
+    const angle = -135 + frac * 270;
+    this.speedoNeedle.style.transform = `rotate(${angle}deg)`;
+    if (this.speedoValue) this.speedoValue.textContent = this.player.mode === 'observe' ? '—' : speedMS.toFixed(0);
+    if (this.speedoTurbo) this.speedoTurbo.classList.toggle('hidden', !this.player.turboActive);
   }
 }
 

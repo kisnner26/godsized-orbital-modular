@@ -10,7 +10,7 @@ import { Cockpit } from './world/Cockpit.js?v=turbo';
 import { SolarSystem } from './world/SolarSystem.js?v=scenarios2';
 import { FreeExploration } from './world/FreeExploration.js?v=exploration2';
 import { buildSpaceEnvironment } from './world/SpaceEnvironment.js';
-import { HUD } from './ui/HUD.js';
+import { HUD } from './ui/HUD.js?v=speedo2';
 import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=fp2';
 
 const canvas = document.getElementById('game');
@@ -29,6 +29,7 @@ const exitObservation = document.getElementById('exitObservation');
 const speedControl = document.getElementById('speedControl');
 const speedSlider = document.getElementById('speedSlider');
 const speedValue = document.getElementById('speedValue');
+const speedo = document.getElementById('speedo');
 const bodySwitcher = document.getElementById('bodySwitcher');
 const bodyName = document.getElementById('bodyName');
 const bodyOptions = document.getElementById('bodyOptions');
@@ -110,6 +111,7 @@ function startFreeSimulation() {
   hudEl.classList.remove('hidden');
   helmetEl.classList.add('hidden');
   speedControl.classList.remove('hidden');
+  speedo.classList.remove('hidden');
   controlsHint.classList.remove('hidden');
   setSpeedLimitForMode('free', MODE_SPEED_LIMITS.free);
   if (missionTitle) missionTitle.textContent = 'ORION-07 / EXPLORACION';
@@ -127,6 +129,7 @@ function enterFlight() {
   hudEl.classList.remove('hidden');
   helmetEl.classList.add('hidden');
   speedControl.classList.remove('hidden');
+  speedo.classList.remove('hidden');
   cinematic.classList.add('hidden');
   if (missionTitle) missionTitle.textContent = 'ORION-07 / VUELO';
 
@@ -165,6 +168,7 @@ function beginApproachIfClose() {
     cinematic.classList.remove('hidden');     // barras cinematográficas
     panel.classList.add('hidden');
     speedControl.classList.add('hidden');
+    speedo.classList.add('hidden');
     controlsHint.classList.add('hidden');
     cockpit.startObservation();               // ocultar la nave durante la cinemática
     player.beginSolarApproach(center);
@@ -246,6 +250,7 @@ function enterObservation(index) {
   exitObservation.classList.remove('hidden');
   panel.classList.add('hidden');
   speedControl.classList.add('hidden');
+  speedo.classList.add('hidden');
   bodySwitcher.classList.remove('hidden');
   systemSpeed.classList.remove('hidden');
   document.body.classList.add('is-observation');
@@ -298,6 +303,7 @@ function exitObserveMode() {
   cockpit.startFlight();
   document.body.classList.remove('is-observation');
   speedControl.classList.remove('hidden');
+  speedo.classList.remove('hidden');
   input.lock();
 
   // Reiniciamos el flujo: la nave vuelve al punto de partida y se puede
@@ -352,6 +358,7 @@ function setGameplayMode(mode) {
       input.lock();
       hudEl.classList.remove('hidden');
       speedControl.classList.remove('hidden');
+      speedo.classList.remove('hidden');
       controlsHint.classList.remove('hidden');
       bodySwitcher.classList.add('hidden');
       systemSpeed.classList.add('hidden');
