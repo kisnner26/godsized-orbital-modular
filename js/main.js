@@ -6,12 +6,12 @@ import { ModelLoader } from './systems/ModelLoader.js';
 import { Narrator } from './systems/Narrator.js?v=radio';
 import { ShipAudio } from './systems/ShipAudio.js?v=esc';
 import { Player } from './world/Player.js?v=turbo5';
-import { Cockpit } from './world/Cockpit.js?v=glass5';
-import { SolarSystem } from './world/SolarSystem.js?v=scenarios2';
+import { Cockpit } from './world/Cockpit.js?v=meteor1';
+import { SolarSystem } from './world/SolarSystem.js?v=flare1';
 import { FreeExploration } from './world/FreeExploration.js?v=exploration2';
-import { buildSpaceEnvironment } from './world/SpaceEnvironment.js';
+import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=twinkle1';
 import { HUD } from './ui/HUD.js?v=speedo2';
-import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=fp2';
+import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=facts1';
 
 const canvas = document.getElementById('game');
 const boot = document.getElementById('boot');
@@ -52,7 +52,8 @@ const shipAudio = new ShipAudio(input, player);
 const physics = new PhysicsOverlay(solar);
 
 engine.scene.add(player.rig);
-const sky = buildSpaceEnvironment(engine.scene).sky;
+const spaceEnv = buildSpaceEnvironment(engine.scene);
+const sky = spaceEnv.sky;
 solar.build();
 
 const _camWorld = new THREE.Vector3();
@@ -84,6 +85,7 @@ function startSimulation() {
   document.body.classList.add('is-flight');
 
   cockpit.makeIntroShip(INTRO_SHIP_POS);
+  cockpit.spawnMeteorFlyby(INTRO_SHIP_POS);
   cockpit.setIntroEVA();
   player.startIntro(INTRO_SHIP_POS);
 
@@ -639,6 +641,7 @@ engine.addUpdater(dt => {
   updateIntroSequence();
   engine.camera.getWorldPosition(_camWorld);
   sky.position.copy(_camWorld);   // el cielo sigue a la cámara (skybox)
+  spaceEnv.stars.userData.uniforms.uTime.value += dt;
   cockpit.update(dt, player);
   if (gameplayMode === 'solar') solar.update(dt);
   hud.update(dt);
