@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Engine } from './core/Engine.js?v=fps2';
+import { Engine } from './core/Engine.js?v=fps3';
 import { Input } from './systems/Input.js?v=padfeel1';
 import { GamepadController } from './systems/Gamepad.js?v=padfeel2';
 import { ModelLoader } from './systems/ModelLoader.js';

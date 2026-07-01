@@ -108,6 +108,7 @@ body.is-observation .controls-hint{top:auto;bottom:150px}
 .settings__grid{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:26px;align-content:start}
 .settings__section{padding:28px 24px;background:linear-gradient(160deg,rgba(0,16,22,.5),rgba(0,4,6,.3));border:1px solid rgba(120,255,230,.16);border-radius:12px}
 .settings__title{display:block;font-size:11px;letter-spacing:.3em;color:rgba(120,255,230,.78);margin-bottom:20px}
+.settings__title--sub{margin-top:22px;margin-bottom:12px;color:rgba(220,255,255,.62)}
 .settings__modes{display:flex;gap:9px;flex-wrap:wrap}
 .settings__modes button{flex:1;min-width:100px;padding:15px 12px;font-size:13px;letter-spacing:.05em;color:rgba(220,255,255,.72);background:rgba(0,18,26,.5);border:1px solid rgba(100,255,225,.2);border-radius:9px;cursor:pointer;transition:all .15s}
 .settings__modes button:hover{color:#eafffb;border-color:rgba(120,255,230,.5);transform:translateY(-1px)}
