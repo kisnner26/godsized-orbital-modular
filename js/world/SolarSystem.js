@@ -5,6 +5,7 @@ const G = 6.67430e-11;
 const AU = 1.496e11;
 const M_SUN = 1.989e30;
 const M_EARTH = 5.972e24;
+const M_JUPITER = 1.898e27;
 const M_COMET = 2.2e14;
 const VISUAL_AU = 34;
 const PHYS_STEP = 3600 * 6;
@@ -102,6 +103,8 @@ void main(){
   float fres = pow(1.0 - ndv, uPower);
   gl_FragColor = vec4(uColor, fres * uStrength);
 }`;
+
+const tmpCometDir = new THREE.Vector3();
 
 function makeOrbit(radius, color=0x39535d, opacity=0.18) {
   const pts = [];
@@ -499,6 +502,7 @@ export class SolarSystem {
     }
 
     this.makeAsteroids();
+    this.makeBackgroundComets();
     this.makeSimBody('planet', 1, 0, 0, 0, 29.8, 0);
   }
 
@@ -519,6 +523,38 @@ export class SolarSystem {
     }
     this.group.add(inst);
     if (this.solarExtra) this.solarExtra.push(inst);
+    // Referencia para animar el cinturón como un solo bloque rígido (barato
+    // en CPU/GPU: nada de recalcular 2200 matrices por frame) en vez de
+    // dejarlo congelado para siempre.
+    this.asteroidBelt = inst;
+  }
+
+  // Cometas decorativos de fondo: dan vida al sistema con trayectorias muy
+  // elípticas que cruzan el plano exterior. No son cuerpos "observables" (el
+  // cometa de BODY_PRESETS es aparte); esto es puro ambiente visual barato:
+  // dos sprites aditivos por cometa, posición paramétrica, sin física real.
+  makeBackgroundComets() {
+    this.bgComets = [];
+    const headTex = makeRadialSpriteTexture('rgba(215,242,255,1)', 'rgba(120,180,255,0)');
+    const tailTex = makeRadialSpriteTexture('rgba(180,222,255,0.9)', 'rgba(90,150,255,0)');
+    for (let i = 0; i < 5; i++) {
+      const g = new THREE.Group();
+      const head = new THREE.Sprite(new THREE.SpriteMaterial({ map: headTex, color: 0xdff3ff, transparent:true, opacity:0.9, blending:THREE.AdditiveBlending, depthWrite:false }));
+      head.scale.set(2.2, 2.2, 1);
+      const tail = new THREE.Sprite(new THREE.SpriteMaterial({ map: tailTex, color: 0x9fd0ff, transparent:true, opacity:0.5, blending:THREE.AdditiveBlending, depthWrite:false }));
+      tail.scale.set(11, 4.2, 1);
+      g.add(tail, head);
+      this.group.add(g);
+      if (this.solarExtra) this.solarExtra.push(g);
+      this.bgComets.push({
+        group: g, tail,
+        a: 46 + Math.random() * 430,
+        e: 0.55 + Math.random() * 0.4,
+        incl: (Math.random() - 0.5) * 0.9,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.018 + Math.random() * 0.026
+      });
+    }
   }
 
   // ---------- Escenarios alternativos (estrella masiva, púlsar, binario) ----------
@@ -582,9 +618,28 @@ export class SolarSystem {
     return g;
   }
 
+  makeJupiterMarker() {
+    // Referencia visual de Júpiter: es quien de verdad "tira" del Sol en el
+    // escenario de bamboleo solar. Se queda prácticamente fijo (su propio
+    // bamboleo es minúsculo comparado con el del Sol) para mantener el
+    // cálculo simple sin perder precisión perceptible.
+    const g = new THREE.Group();
+    const radius = 3.25;
+    const fallback = makePlanetCanvas('Jupiter', ['#b17a4d','#e1c08e','#6d4b35']);
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 96, 96),
+      new THREE.MeshStandardMaterial({ map: this.tex('https://threejs.org/examples/textures/planets/jupiter.jpg', fallback), roughness: 0.74, metalness: 0 })
+    );
+    mesh.position.set(5.2 * VISUAL_AU, 0, 0);
+    g.add(mesh);
+    g.userData.mesh = mesh;
+    return g;
+  }
+
   buildScenarioVisual(name) {
     if (name === 'massive') return this.makeGlowStar(11, 0xaaccff, 0x88aaff, 45);
     if (name === 'pulsar') return this.makePulsar();
+    if (name === 'sunwobble') return this.makeJupiterMarker();
     if (name === 'binary') {
       const g = new THREE.Group();
       const a = this.makeGlowStar(3.2, 0xfff0c0, 0xffcf72, 22);
@@ -599,7 +654,8 @@ export class SolarSystem {
   setScenario(name) {
     this.scenario = name;
     const solar = name === 'solar';
-    if (this.sunCore) this.sunCore.visible = solar;
+    if (this.sunCore) this.sunCore.visible = solar && !this.sunCollapsed;
+    if (this.blackHole) this.blackHole.visible = solar && !!this.sunCollapsed;
     if (this.planets) this.planets.forEach(p => p.pivot.visible = solar);
     if (this.solarExtra) this.solarExtra.forEach(o => o.visible = solar);
     for (const k in this.scenarioVisuals) this.scenarioVisuals[k].visible = false;
@@ -620,11 +676,54 @@ export class SolarSystem {
     } else if (name === 'pulsar') {
       this.attractors = [{ mass: 1.4 * M_SUN, x: 0, y: 0, z: 0 }];
       this.binary = null;
+    } else if (name === 'sunwobble') {
+      // Júpiter (fijo a su distancia real) es el atractor: el Sol observado
+      // orbita el baricentro Sol-Júpiter con radio y periodo reales.
+      this.attractors = [{ mass: M_JUPITER, x: 5.2 * AU, y: 0, z: 0 }];
+      this.binary = null;
     } else if (name === 'binary') {
       const m = 2 * M_SUN, sep = 6 * AU;
       this.attractors = [{ mass: m, x: sep / 2, y: 0, z: 0 }, { mass: m, x: -sep / 2, y: 0, z: 0 }];
       this.binary = { mass: m, sep, angle: 0, omega: Math.sqrt(G * 2 * m / (sep * sep * sep)) };
     }
+  }
+
+  // ---------- Colapso del Sol (experimento mental) ----------
+  // El Sol se sustituye por un agujero negro de la MISMA masa: la gravedad
+  // (F = G·M·m/r²) depende solo de masa y distancia, nunca del tamaño del
+  // objeto, así que las órbitas de los planetas no cambian en absoluto.
+  makeBlackHoleVisual() {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(
+      new THREE.SphereGeometry(1.5, 64, 64),
+      new THREE.MeshBasicMaterial({ color: 0x000000 })
+    );
+    g.add(core);
+    const diskTex = makeRadialSpriteTexture('rgba(255,238,205,1)', 'rgba(255,140,60,0)');
+    const disk = new THREE.Mesh(
+      new THREE.RingGeometry(1.9, 3.8, 128),
+      new THREE.MeshBasicMaterial({ map: diskTex, color: 0xffdca0, side: THREE.DoubleSide, transparent: true, opacity: 0.88, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    disk.rotation.x = Math.PI / 2.4;
+    g.add(disk);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeRadialSpriteTexture('rgba(255,255,255,0.9)', 'rgba(120,160,255,0)'),
+      color: 0xbfd9ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    glow.scale.set(9, 9, 1);
+    g.add(glow);
+    g.visible = false;
+    g.userData.disk = disk;
+    return g;
+  }
+
+  setSunCollapsed(collapsed) {
+    this.sunCollapsed = collapsed;
+    if (!this.blackHole) { this.blackHole = this.makeBlackHoleVisual(); this.group.add(this.blackHole); }
+    const solar = this.scenario === 'solar';
+    if (this.sunCore) this.sunCore.visible = solar && !collapsed;
+    this.blackHole.visible = solar && collapsed;
+    if (this.sim?.type === 'star') this.sim.mesh.visible = !collapsed;
   }
 
   // Libera geometrías/materiales/texturas de un objeto y sus hijos. Sin esto,
@@ -660,6 +759,11 @@ export class SolarSystem {
     let mat;
     if (type === 'comet') {
       mat = new THREE.MeshStandardMaterial({ color:0xcfeeff, emissive:0x5c9fff, emissiveIntensity:.6, roughness:.4 });
+    } else if (type === 'star') {
+      // El Sol observado: material auto-iluminado (no depende de las luces
+      // de la escena), igual que el Sol de la vista general.
+      const sunMap = look.url ? this.tex(look.url, makeSunTexture()) : makeSunTexture();
+      mat = new THREE.MeshBasicMaterial({ map: sunMap, toneMapped:false });
     } else {
       // Textura real del planeta (con respaldo procedural si no hay internet)
       const fallback = makePlanetCanvas(look.fallbackName || 'SimBody', look.colors || ['#083777','#1e6a4e','#9cc5ff']);
@@ -682,8 +786,42 @@ export class SolarSystem {
     }
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 96, 96), mat);
 
-    if (type !== 'comet') {
+    if (type === 'planet') {
       mesh.add(this.makeAtmosphere(radius, look.atmo || 0x63b8ff, look.atmo ? 0.2 : 0.06, 1.06));
+    }
+    if (type === 'star') {
+      // Halo aditivo en capas, igual que el Sol de la vista general, para
+      // que el cuerpo observado también brille en vez de verse como una
+      // bola plana.
+      const haloTex = makeRadialSpriteTexture();
+      for (const [scale, opacity, color] of [[radius*5.5, 0.5, 0xffcf72], [radius*10, 0.22, 0xff8a2a], [radius*17, 0.1, 0xff4d12]]) {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: haloTex, color, transparent:true, opacity, blending:THREE.AdditiveBlending, depthWrite:false
+        }));
+        sprite.scale.set(scale, scale, 1);
+        mesh.add(sprite);
+      }
+      const sunLight = new THREE.PointLight(0xffe6c0, 14, 2000, 1.1);
+      mesh.add(sunLight);
+    }
+    // Luna orbitando la Tierra observada, igual que en la vista general: da
+    // vida al cuerpo y demuestra que tiene su propia física orbital.
+    let moonPivot = null;
+    if (look.name === 'Tierra') {
+      const moon = new THREE.Mesh(
+        new THREE.SphereGeometry(radius * 0.27, 48, 48),
+        new THREE.MeshStandardMaterial({
+          map: this.tex('https://threejs.org/examples/textures/planets/moon_1024.jpg', makePlanetCanvas('Luna', ['#9a958f','#5a554f','#c4c0b8'])),
+          roughness: 0.95, metalness: 0.0
+        })
+      );
+      moonPivot = new THREE.Group();
+      moon.position.set(radius * 2.8, 0, 0);
+      moonPivot.add(moon);
+      moonPivot.rotation.x = 0.09;
+      moonPivot.rotation.y = Math.random() * Math.PI * 2;
+      mesh.add(moonPivot);
+      mesh.userData.moonPivot = moonPivot;
     }
     // Anillos (Saturno / Urano)
     if (look.ring) {
@@ -700,7 +838,7 @@ export class SolarSystem {
     mesh.position.set(xAU * VISUAL_AU, yAU * VISUAL_AU, zAU * VISUAL_AU);
     this.group.add(mesh);
     this.sim = {
-      type, mesh, mass: type === 'comet' ? M_COMET : M_EARTH,
+      type, mesh, moonPivot, mass: type === 'comet' ? M_COMET : type === 'star' ? M_SUN : M_EARTH,
       x:xAU*AU, y:yAU*AU, z:zAU*AU, vx:vxKm*1000, vy:vyKm*1000, vz:vzKm*1000
     };
 
@@ -822,6 +960,29 @@ export class SolarSystem {
       this.scenarioVisuals.pulsar.userData.core.rotation.y += dt * 2.0 * ts;
     }
 
+    // Cinturón de asteroides: se gira como un solo bloque (barato) en vez de
+    // quedarse congelado para siempre.
+    if (this.asteroidBelt) this.asteroidBelt.rotation.y += dt * ts * 0.014;
+
+    // Cometas de fondo: órbitas muy elípticas paramétricas (sin física real,
+    // solo ambientación) que cruzan el sistema y se pierden de vista.
+    if (this.bgComets) {
+      for (const c of this.bgComets) {
+        c.phase += dt * ts * c.speed;
+        const r = c.a * (1 - c.e * c.e) / (1 + c.e * Math.cos(c.phase));
+        const x = Math.cos(c.phase) * r;
+        const z = Math.sin(c.phase) * r;
+        const y = Math.sin(c.phase * 0.5) * r * Math.sin(c.incl) * 0.3;
+        c.group.position.set(x, y, z);
+        tmpCometDir.set(x, y, z).normalize();
+        c.tail.position.copy(tmpCometDir.multiplyScalar(5.5));
+        c.tail.material.opacity = THREE.MathUtils.clamp(0.7 - r / 480, 0.06, 0.7);
+      }
+    }
+
+    // Disco de acreción del agujero negro (si el Sol está "colapsado").
+    if (this.blackHole?.visible) this.blackHole.userData.disk.rotation.z += dt * ts * 0.6;
+
     if (!this.sim) return;
     // La velocidad de la simulación física también sigue al timeScale.
     const steps = ts >= 1 ? Math.min(48, Math.round(4 * ts)) : 4;
@@ -848,6 +1009,7 @@ export class SolarSystem {
     const pos = new THREE.Vector3(b.x/AU*VISUAL_AU, b.y/AU*VISUAL_AU, b.z/AU*VISUAL_AU);
     b.mesh.position.copy(pos);
     b.mesh.rotation.y += dt * .5 * ts;
+    if (b.moonPivot) b.moonPivot.rotation.y += dt * ts * 0.35;
     this.trailPoints.push(pos.clone());
     if (this.trailPoints.length > 700) this.trailPoints.shift();
     this.trail.geometry.setFromPoints(this.trailPoints);

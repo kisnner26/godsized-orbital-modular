@@ -24,6 +24,8 @@
     <div class="crosshair"></div>
   </div>
 
+  <div id="interactPrompt" class="prompt hidden">Presiona <b>F</b> para aterrizar</div>
+
   <section id="hud" class="hud hidden">
     <div class="hud__top">
       <div>
@@ -296,11 +298,15 @@
     <span class="sysspeed__label">VELOCIDAD DEL SISTEMA</span>
     <div class="sysspeed__row">
       <button id="sysSpeedDown" title="Más lento">−</button>
-      <input id="sysSpeedSlider" type="range" min="0.1" max="5" step="0.1" value="1">
+      <input id="sysSpeedSlider" type="range" min="0.1" max="5" step="0.1" value="0.2">
       <button id="sysSpeedUp" title="Más rápido">+</button>
-      <strong id="sysSpeedValue">1.0×</strong>
+      <strong id="sysSpeedValue">0.2×</strong>
     </div>
   </div>
+
+  <button id="hudToggle" class="hud-toggle hidden" title="Ocultar/mostrar HUD (H)">×</button>
+  <button id="collapseSunBtn" class="collapse-sun hidden">☄ COLAPSAR EL SOL</button>
+  <button id="restoreSunBtn" class="restore-sun hidden">☀ RESTAURAR EL SOL</button>
 
   <div id="subtitle" class="subtitle hidden">
     <span id="subtitleSpeaker">ASTRONAUTA</span>
@@ -315,6 +321,6 @@
     }
   }
   </script>
-  <script type="module" src="./js/main.js?v=lesson1"></script>
+  <script type="module" src="./js/main.js?v=sunlife2"></script>
 </body>
 </html>

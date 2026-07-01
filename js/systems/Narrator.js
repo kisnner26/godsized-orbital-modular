@@ -11,6 +11,9 @@ export class Narrator {
     this.masterGain = null;
     this.ambienceNoise = null;
     this.ambienceGain = null;
+    this.speaking = false;   // hay una frase en curso (evita que otra la corte a la mitad)
+    this.queue = [];         // frases pendientes, se leen en orden al terminar la actual
+    this.maxQueue = 2;       // si se acumulan más, se descarta la más vieja (evita leer noticias viejas)
     if ('speechSynthesis' in window) {
       const load = () => {
         this.voices = window.speechSynthesis.getVoices();
@@ -149,16 +152,71 @@ export class Narrator {
     this.playRadioClick(1200);
   }
 
-  say(spanishLine, duration = 5200) {
+  // Corta lo que se esté leyendo YA MISMO y vacía la cola, para los pocos
+  // casos donde de verdad se quiere interrumpir (p. ej. el usuario navega
+  // manualmente a otro paso de la lección guiada). Todo lo demás (eventos
+  // de la nave, recordatorios, etc.) debe usar say() normal, que encola en
+  // vez de cortar.
+  interrupt() {
+    this.queue = [];
+    clearTimeout(this._closeTimer);
+    clearTimeout(this.hideTimer);
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    this.speaking = false;
+    this.box?.classList.add('hidden');
+  }
+
+  // Estimación de cuánto tarda en leerse un texto a la cadencia usada aquí
+  // (rate 0.97), para no depender solo del `duration` que adivina cada
+  // llamador — sirve de respaldo por si el navegador nunca dispara onend.
+  estimateDuration(text) {
+    return Math.max(2200, text.length * 68);
+  }
+
+  // Antes, cada llamada a say() cancelaba de inmediato la frase anterior
+  // (window.speechSynthesis.cancel()), así que si dos líneas se disparaban
+  // cerca en el tiempo la primera se cortaba a la mitad y saltaba a leer la
+  // segunda. Ahora, si ya hay una frase sonando, la nueva se encola y se lee
+  // completa apenas termine la actual — ninguna frase se corta jamás por
+  // culpa de otra. `onDone` (opcional) se llama cuando ESA frase concreta
+  // termina de leerse de verdad (evento onend real, o el respaldo), para que
+  // quien la pidió pueda sincronizarse con el fin real del audio.
+  say(spanishLine, duration = 5200, onDone = null) {
+    if (this.speaking) {
+      this.queue.push({ spanishLine, duration, onDone });
+      while (this.queue.length > this.maxQueue) this.queue.shift();
+      return;
+    }
+    this.speaking = true;
+    this._speakNow(spanishLine, duration, onDone);
+  }
+
+  _finish(onDone) {
+    this.speaking = false;
+    this.box?.classList.add('hidden');
+    onDone?.();
+    const next = this.queue.shift();
+    if (next) {
+      this.speaking = true;
+      this._speakNow(next.spanishLine, next.duration, next.onDone);
+    }
+  }
+
+  _speakNow(spanishLine, duration, onDone) {
+    const effectiveDuration = Math.max(duration, this.estimateDuration(spanishLine));
     if (this.box && this.text) {
       this.speaker.textContent = 'ASTRONAUTA';
       this.text.textContent = spanishLine;
       this.box.classList.remove('hidden');
       clearTimeout(this.hideTimer);
-      this.hideTimer = setTimeout(() => this.box.classList.add('hidden'), duration);
     }
 
-    if (!this.enabled || !('speechSynthesis' in window)) return;
+    if (!this.enabled || !('speechSynthesis' in window)) {
+      // Sin voz disponible: igual respetamos el tiempo de lectura estimado
+      // antes de dar la frase por terminada, para no disparar onDone al instante.
+      this.hideTimer = setTimeout(() => this._finish(onDone), effectiveDuration);
+      return;
+    }
     try {
       this.ensureAudio();
       this.openChannel();
@@ -172,14 +230,20 @@ export class Narrator {
       u.pitch = 0.9;
       u.volume = 1.0;
       clearTimeout(this._closeTimer);
-      const close = () => { u.onend = null; u.onerror = null; this.closeChannel(); };
+      const close = () => {
+        u.onend = null; u.onerror = null;
+        clearTimeout(this._closeTimer);
+        this.closeChannel();
+        this._finish(onDone);
+      };
       u.onend = close;
       u.onerror = close;
       // Respaldo por si el navegador no llega a disparar onend/onerror.
-      this._closeTimer = setTimeout(close, duration + 500);
+      this._closeTimer = setTimeout(close, effectiveDuration + 500);
       window.speechSynthesis.speak(u);
     } catch (err) {
       console.warn('Narrator unavailable:', err);
+      this._finish(onDone);
     }
   }
 }
