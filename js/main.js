@@ -12,6 +12,7 @@ import { FreeExploration } from './world/FreeExploration.js?v=exploration2';
 import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=twinkle1';
 import { HUD } from './ui/HUD.js?v=speedo2';
 import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=facts1';
+import { GuidedLesson } from './ui/GuidedLesson.js?v=4';
 
 const canvas = document.getElementById('game');
 const boot = document.getElementById('boot');
@@ -36,6 +37,9 @@ const bodyOptions = document.getElementById('bodyOptions');
 const controlsHint = document.getElementById('controlsHint');
 const padToast = document.getElementById('padToast');
 const cinematic = document.getElementById('cinematic');
+const lessonLaunch = document.getElementById('lessonLaunch');
+const lessonPanel = document.getElementById('lessonPanel');
+const lessonDiagram = document.getElementById('lessonDiagram');
 let modeSolar = document.getElementById('modeSolar');
 let modeFree = document.getElementById('modeFree');
 let modeStatus = document.getElementById('modeStatus');
@@ -50,6 +54,31 @@ const freeExploration = new FreeExploration(engine.scene, engine.camera);
 const narrator = new Narrator();
 const shipAudio = new ShipAudio(input, player);
 const physics = new PhysicsOverlay(solar);
+const lesson = new GuidedLesson({
+  player, solar, narrator,
+  launchBtn: lessonLaunch,
+  panel: lessonPanel,
+  titleEl: document.getElementById('lessonStepTitle'),
+  dotsEl: document.getElementById('lessonDots'),
+  diagram: lessonDiagram,
+  prevBtn: document.getElementById('lessonPrev'),
+  nextBtn: document.getElementById('lessonNext'),
+  playPauseBtn: document.getElementById('lessonPlayPause'),
+  closeBtn: document.getElementById('lessonClose'),
+  onStart: () => {
+    bodySwitcher.classList.add('hidden');
+    systemSpeed.classList.add('hidden');
+    controlsHint.classList.add('hidden');
+  },
+  onStop: () => {
+    if (player.mode === 'observe') {
+      bodySwitcher.classList.remove('hidden');
+      systemSpeed.classList.remove('hidden');
+      controlsHint.classList.remove('hidden');
+      updateBodySwitcher();
+    }
+  }
+});
 
 engine.scene.add(player.rig);
 const spaceEnv = buildSpaceEnvironment(engine.scene);
@@ -263,6 +292,7 @@ function enterObservation(index) {
   physics.show(b.label);
   solar.setVectorsVisible(true);
   updateBodySwitcher();
+  lesson.setEarthAvailable(b.label === 'TIERRA');
   if (missionTitle) missionTitle.textContent = `OBSERVACIÓN / ${b.label}`;
   narrator.say(b.line, 7000);
 }
@@ -292,6 +322,8 @@ function observe(type) {
 }
 
 function exitObserveMode() {
+  lesson.stop();
+  lessonLaunch.classList.add('hidden');
   exitObservation.classList.add('hidden');
   panel.classList.add('hidden');
   bodySwitcher.classList.add('hidden');
@@ -336,6 +368,8 @@ function setGameplayMode(mode) {
   if (!startBtn.disabled) startBtn.textContent = mode === 'solar' ? 'INICIAR SIMULACIÓN' : 'INICIAR EXPLORACIÓN';
   document.body.classList.toggle('is-free-mode', mode === 'free');
 
+  lesson.stop();
+  lessonLaunch.classList.add('hidden');
   const hasStarted = boot.classList.contains('hidden');
   if (mode === 'free') {
     solar.group.visible = false;
@@ -646,13 +680,14 @@ engine.addUpdater(dt => {
   if (gameplayMode === 'solar') solar.update(dt);
   hud.update(dt);
   if (gameplayMode === 'solar') physics.update(dt);
+  if (gameplayMode === 'solar') lesson.update(dt);
   shipAudio.update(dt);
   if (gameplayMode === 'solar') {
     beginApproachIfClose();
     if (player.approachFinished) onCinematicEnd();
   }
 
-  if (gameplayMode === 'solar' && player.mode === 'observe') {
+  if (gameplayMode === 'solar' && player.mode === 'observe' && !lesson.active) {
     lastNarration += dt;
     if (lastNarration > 22) {
       lastNarration = 0;
