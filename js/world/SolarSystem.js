@@ -469,7 +469,10 @@ export class SolarSystem {
           })
         );
         const moonPivot = new THREE.Group();
-        moon.position.set(p.radius * 2.6, 0, 0);
+        // Radio y velocidad exagerados a propósito (la Luna real orbitaría
+        // demasiado cerca y despacio para notarse a esta escala): así se ve
+        // claramente como un cuerpo aparte que gira, no una mancha pegada.
+        moon.position.set(p.radius * 3.6, 0, 0);
         moonPivot.add(moon);
         moonPivot.rotation.x = 0.09;
         mesh.add(moonPivot);
@@ -537,7 +540,7 @@ export class SolarSystem {
     this.bgComets = [];
     const headTex = makeRadialSpriteTexture('rgba(215,242,255,1)', 'rgba(120,180,255,0)');
     const tailTex = makeRadialSpriteTexture('rgba(180,222,255,0.9)', 'rgba(90,150,255,0)');
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       const g = new THREE.Group();
       const head = new THREE.Sprite(new THREE.SpriteMaterial({ map: headTex, color: 0xdff3ff, transparent:true, opacity:0.9, blending:THREE.AdditiveBlending, depthWrite:false }));
       head.scale.set(2.2, 2.2, 1);
@@ -816,7 +819,7 @@ export class SolarSystem {
         })
       );
       moonPivot = new THREE.Group();
-      moon.position.set(radius * 2.8, 0, 0);
+      moon.position.set(radius * 3.6, 0, 0);
       moonPivot.add(moon);
       moonPivot.rotation.x = 0.09;
       moonPivot.rotation.y = Math.random() * Math.PI * 2;
@@ -951,7 +954,7 @@ export class SolarSystem {
         p.pivot.rotation.y += p.pivot.userData.speed * dt * ts;
         p.mesh.rotation.y += dt * ts * (p.data.name === 'Jupiter' ? 0.12 : 0.075);
         if (p.mesh.userData.clouds) p.mesh.userData.clouds.rotation.y += dt * ts * 0.045;
-        if (p.mesh.userData.moonPivot) p.mesh.userData.moonPivot.rotation.y += dt * ts * 0.35;
+        if (p.mesh.userData.moonPivot) p.mesh.userData.moonPivot.rotation.y += dt * ts * 0.9;
       }
     }
     // Animación de los visuales de escenario
@@ -1009,7 +1012,7 @@ export class SolarSystem {
     const pos = new THREE.Vector3(b.x/AU*VISUAL_AU, b.y/AU*VISUAL_AU, b.z/AU*VISUAL_AU);
     b.mesh.position.copy(pos);
     b.mesh.rotation.y += dt * .5 * ts;
-    if (b.moonPivot) b.moonPivot.rotation.y += dt * ts * 0.35;
+    if (b.moonPivot) b.moonPivot.rotation.y += dt * ts * 0.9;
     this.trailPoints.push(pos.clone());
     if (this.trailPoints.length > 700) this.trailPoints.shift();
     this.trail.geometry.setFromPoints(this.trailPoints);

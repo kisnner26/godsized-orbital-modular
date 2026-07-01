@@ -40,3 +40,10 @@ body.is-steering,body.is-steering #game{cursor:none}
 .speedo__turbo.hidden{display:none}
 @keyframes speedoTurboPulse{from{opacity:.5}to{opacity:1}}
 body.is-free-mode .speedo{bottom:180px}
+
+/* Telemetría de velocidad luz / dilatación temporal (solo Exploración) */
+.lightspeed{position:fixed;z-index:32;top:26px;left:34px;padding:12px 16px;background:linear-gradient(135deg,rgba(0,20,28,.72),rgba(0,0,0,.42));border:1px solid rgba(120,200,255,.32);box-shadow:0 12px 44px rgba(0,0,0,.45),0 0 30px rgba(80,160,255,.12);backdrop-filter:blur(12px);pointer-events:none;min-width:210px}
+.lightspeed__label{display:block;font-size:9px;letter-spacing:.2em;color:rgba(140,200,255,.7);margin-bottom:8px}
+.lightspeed__label strong{font-size:9px;letter-spacing:.15em;color:#bfe0ff;text-shadow:0 0 10px rgba(120,190,255,.6)}
+.lightspeed__row{display:flex;justify-content:space-between;gap:14px;font-size:11px;color:rgba(220,240,255,.7);margin-top:5px}
+.lightspeed__row strong{color:#eaf6ff;letter-spacing:.03em;text-shadow:0 0 10px rgba(120,190,255,.4)}

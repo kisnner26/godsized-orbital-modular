@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const forward = new THREE.Vector3();
+const forward2 = new THREE.Vector3();
 const right = new THREE.Vector3();
 const up = new THREE.Vector3(0, 1, 0);
 const cameraTarget = new THREE.Vector3();
@@ -57,6 +58,14 @@ export class Player {
     this.shipYaw = 0;
     this.shipPitch = 0;
     this.shipRoll = 0;
+
+    // ---- Interruptor de velocidad luz (solo Exploración) ----
+    this.lightSpeedActive = false;
+    this.lightSpeedC = 20000;       // "c" del juego, unidades/s
+    this.lightSpeedBeta = 0;        // v/c actual
+    this.lightSpeedGamma = 1;       // factor de Lorentz actual
+    this.properTime = 0;            // tiempo propio de la nave (s, acumulado)
+    this.coordinateTime = 0;        // tiempo del universo exterior (s, acumulado)
 
     this.cinematicCam = new THREE.Vector3(0, 1.55, 1.28);
     this.chaseCam = new THREE.Vector3(0, 3.15, 15.5);
@@ -356,7 +365,13 @@ export class Player {
         chaseCam.y + Math.cos(t * freqY) * shakeAmount,
         chaseCam.z
       );
-      this.camera.lookAt(chaseLook);
+      // chaseLook es un desplazamiento LOCAL al rig (justo delante de la nave),
+      // no una coordenada del mundo: hay que convertirlo con el rig antes de
+      // lookAt() o la cámara apunta hacia el origen absoluto del mundo. En modo
+      // solar casi no se notaba porque el origen flotante mantiene el rig cerca
+      // de (0,0,0); en Exploración el rig puede estar a cientos de unidades y la
+      // nave quedaba fuera de cuadro (a veces literalmente detrás de la cámara).
+      this.camera.lookAt(this.rig.localToWorld(cameraTarget.copy(chaseLook)));
     }
   }
 
@@ -389,6 +404,7 @@ export class Player {
 
     const accel = new THREE.Vector3();
     const boost = this.input.keys.ShiftLeft || this.input.keys.ShiftRight;
+    const lightSpeed = this.lightSpeedActive && this.gameplayMode === 'free';
     // El turbo (tecla M / R3) quintuplica el empuje. Como la velocidad de
     // crucero real es un equilibrio empuje/arrastre (no el tope `maxSpeed`,
     // que casi nunca se alcanza en vuelo normal), escalar el empuje es lo
@@ -398,20 +414,33 @@ export class Player {
     const reverseThrust = (boost ? 10 : 5) * scale;
     const sideThrust = (boost ? 9 : 4.5) * scale;
 
-    // Controles estándar:
-    // W = avanzar, S = retroceder, A = izquierda, D = derecha.
-    if (this.input.keys.KeyW) accel.addScaledVector(forward, mainThrust);
-    if (this.input.keys.KeyS) accel.addScaledVector(forward, -reverseThrust);
+    // Controles estándar: A/D/arriba/abajo siempre disponibles para maniobrar.
     if (this.input.keys.KeyA) accel.addScaledVector(right, -sideThrust);
     if (this.input.keys.KeyD) accel.addScaledVector(right, sideThrust);
     if (this.input.keys.Space) accel.y += sideThrust;
     if (this.input.keys.ControlLeft || this.input.keys.ControlRight) accel.y -= sideThrust;
 
-    this.vel.addScaledVector(accel, dt);
-    const speedCap = this.turboActive ? this.maxSpeed * this.turboMultiplier : this.maxSpeed;
-    const v = this.vel.length();
-    if (v > speedCap) this.vel.multiplyScalar(speedCap / v);
-    this.vel.multiplyScalar(0.986);
+    if (lightSpeed) {
+      // Motor de velocidad luz: el equilibrio empuje/arrastre normal jamás
+      // acercaría la nave a `lightSpeedC` (el arrastre lo frenaría a un
+      // parpadeo de esa velocidad), así que en vez de sumar más empuje se
+      // interpola la velocidad directamente hacia el objetivo — como un
+      // motor totalmente distinto, no un turbo más fuerte. W acelera hacia
+      // el tope (casi c, nunca lo toca), soltar W deja caer la velocidad.
+      const target = this.input.keys.KeyW ? this.lightSpeedC * 0.9999 : 0;
+      const rate = target > 0 ? 3.2 : 1.4;
+      forward2.copy(forward).multiplyScalar(target);
+      this.vel.lerp(forward2, 1 - Math.exp(-dt / rate));
+      this.vel.addScaledVector(accel, dt);
+    } else {
+      if (this.input.keys.KeyW) accel.addScaledVector(forward, mainThrust);
+      if (this.input.keys.KeyS) accel.addScaledVector(forward, -reverseThrust);
+      this.vel.addScaledVector(accel, dt);
+      const speedCap = this.turboActive ? this.maxSpeed * this.turboMultiplier : this.maxSpeed;
+      const v = this.vel.length();
+      if (v > speedCap) this.vel.multiplyScalar(speedCap / v);
+      this.vel.multiplyScalar(0.986);
+    }
     this.moveWithCollision(dt);
 
     // Nivel de empuje para llamas y audio
@@ -423,6 +452,26 @@ export class Player {
     this.speed = this.vel.length();
     this.speedMetersPerSecond = this.speed * 8;
     this.o2 = Math.max(0, this.o2 - dt * 0.000035);
+
+    // Dilatación temporal real: beta = v/c, gamma = 1/sqrt(1-beta^2). Solo
+    // se acumula en Exploración (donde vive el interruptor); el tiempo propio
+    // de la nave avanza más despacio que el del universo cuanto más cerca de
+    // "c" se vuela, exactamente como en relatividad especial.
+    if (this.gameplayMode === 'free') {
+      this.lightSpeedBeta = THREE.MathUtils.clamp(this.speed / this.lightSpeedC, 0, 0.99995);
+      this.lightSpeedGamma = 1 / Math.sqrt(1 - this.lightSpeedBeta * this.lightSpeedBeta);
+      this.coordinateTime += dt;
+      this.properTime += dt / this.lightSpeedGamma;
+    } else {
+      this.lightSpeedBeta = 0;
+      this.lightSpeedGamma = 1;
+    }
+  }
+
+  toggleLightSpeed() {
+    if (this.gameplayMode !== 'free' || this.mode !== 'flight') return false;
+    this.lightSpeedActive = !this.lightSpeedActive;
+    return this.lightSpeedActive;
   }
 
   applyKeyboardSteering(dt) {

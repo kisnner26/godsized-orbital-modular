@@ -13,6 +13,12 @@ export class HUD {
     this.speedoNeedle = document.getElementById('speedoNeedle');
     this.speedoValue = document.getElementById('speedoValue');
     this.speedoTurbo = document.getElementById('speedoTurbo');
+    this.lightspeedHud = document.getElementById('lightspeedHud');
+    this.lsState = document.getElementById('lsState');
+    this.lsBeta = document.getElementById('lsBeta');
+    this.lsGamma = document.getElementById('lsGamma');
+    this.lsProper = document.getElementById('lsProper');
+    this.lsCoord = document.getElementById('lsCoord');
   }
   update(dt) {
     this.t += dt;
@@ -37,6 +43,23 @@ export class HUD {
     else if (this.player.mode === 'observe') this.body.textContent = this.player.observation?.label || 'CUERPO';
     else if (this.player.mode === 'approach') this.body.textContent = 'SISTEMA SOLAR';
     else this.body.textContent = 'VUELO LIBRE';
+    this.updateLightspeed();
+  }
+
+  // Panel de dilatación temporal: solo se muestra con el interruptor de
+  // velocidad luz activo (Exploración), para no saturar el HUD el resto del
+  // tiempo.
+  updateLightspeed() {
+    if (!this.lightspeedHud) return;
+    const p = this.player;
+    const show = p.gameplayMode === 'free' && p.lightSpeedActive;
+    this.lightspeedHud.classList.toggle('hidden', !show);
+    if (!show) return;
+    if (this.lsState) this.lsState.textContent = 'ACTIVA';
+    if (this.lsBeta) this.lsBeta.textContent = (p.lightSpeedBeta ?? 0).toFixed(3) + ' c';
+    if (this.lsGamma) this.lsGamma.textContent = (p.lightSpeedGamma ?? 1).toFixed(3);
+    if (this.lsProper) this.lsProper.textContent = formatClock(p.properTime || 0);
+    if (this.lsCoord) this.lsCoord.textContent = formatClock(p.coordinateTime || 0);
   }
 
   // Aguja del velocímetro: 0% = -135°, 100% = +135° (barrido de 270°). La
@@ -58,6 +81,13 @@ export class HUD {
     if (this.speedoValue) this.speedoValue.textContent = this.player.mode === 'observe' ? '—' : speedMS.toFixed(0);
     if (this.speedoTurbo) this.speedoTurbo.classList.toggle('hidden', !this.player.turboActive);
   }
+}
+
+function formatClock(seconds) {
+  const s = Math.max(0, seconds);
+  const m = Math.floor(s / 60);
+  const rem = s - m * 60;
+  return `${String(m).padStart(2, '0')}:${rem.toFixed(1).padStart(4, '0')}`;
 }
 
 function formatMeters(value) {

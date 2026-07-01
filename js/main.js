@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { Engine } from './core/Engine.js?v=world';
+import { Engine } from './core/Engine.js?v=warp1';
 import { Input } from './systems/Input.js?v=noMouse';
 import { GamepadController } from './systems/Gamepad.js?v=turbo';
 import { ModelLoader } from './systems/ModelLoader.js';
 import { Narrator } from './systems/Narrator.js?v=queue1';
 import { ShipAudio } from './systems/ShipAudio.js?v=esc';
-import { Player } from './world/Player.js?v=onfoot2';
+import { Player } from './world/Player.js?v=lightspeed2';
 import { Cockpit } from './world/Cockpit.js?v=onfoot1';
-import { SolarSystem } from './world/SolarSystem.js?v=sunlife1';
-import { FreeExploration } from './world/FreeExploration.js?v=cullfix1';
-import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=constell1';
-import { HUD } from './ui/HUD.js?v=speedo2';
+import { SolarSystem } from './world/SolarSystem.js?v=moonfix3';
+import { FreeExploration } from './world/FreeExploration.js?v=lightspeed1';
+import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=galaxies1';
+import { HUD } from './ui/HUD.js?v=lightspeed1';
 import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=facts2';
 import { GuidedLesson } from './ui/GuidedLesson.js?v=5';
 
@@ -302,6 +302,7 @@ function enterObservation(index) {
   updateBodySwitcher();
   lesson.setEarthAvailable(b.label === 'TIERRA');
   collapseSunBtn?.classList.toggle('hidden', b.label !== 'SOL');
+  restoreSunBtn?.classList.add('hidden');
   if (missionTitle) missionTitle.textContent = `OBSERVACIÓN / ${b.label}`;
   narrator.say(b.line, 7000);
 }
@@ -573,6 +574,15 @@ input.onKeyDown = (code) => {
   if (code === 'KeyC' && gameplayMode === 'solar') panel.classList.toggle('hidden');
   if (code === 'KeyV') toggleFlightView();
   if (code === 'KeyF' && gameplayMode === 'free') tryInteract();
+  if (code === 'KeyL' && gameplayMode === 'free') {
+    const active = player.toggleLightSpeed();
+    narrator.say(
+      active
+        ? 'Interruptor de velocidad luz activado. Mantén W para acelerar hacia c; el tiempo a bordo empezará a dilatarse.'
+        : 'Interruptor de velocidad luz desactivado. Volviendo a velocidad normal.',
+      active ? 6500 : 4000
+    );
+  }
   if (code === 'Equal' || code === 'NumpadAdd') setMaxSpeed(Number(maxSpeed.value) + 10);
   if (code === 'Minus' || code === 'NumpadSubtract') setMaxSpeed(Number(maxSpeed.value) - 10);
   const canSelect = !studyMenu.classList.contains('hidden') || player.mode === 'observe';
@@ -694,7 +704,8 @@ const HINTS = {
   free: [
     ['L-Stick / ←→↑↓', 'Girar'], ['R2 / ✕', 'Acelerar'], ['L2 / ◯', 'Frenar'],
     ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Impulso'],
-    ['M / R3', 'Turbo x5'], ['V', '1ª / 3ª persona'], ['F', 'Aterrizar (sobre suelo rocoso)']
+    ['M / R3', 'Turbo x5'], ['V', '1ª / 3ª persona'], ['F', 'Aterrizar (sobre suelo rocoso)'],
+    ['L', 'Velocidad luz']
   ],
   onfoot: [
     ['W A S D', 'Caminar'], ['←→↑↓', 'Girar / Mirar'], ['Shift', 'Correr'],
@@ -741,6 +752,11 @@ engine.addUpdater(dt => {
   }
   player.setTurbo(input.keys.KeyM);
   player.update(dt);
+  // Efecto visual de velocidad luz: estelas radiales + viraje de color, suavizado
+  // para que no salte de golpe al acelerar/frenar.
+  const targetWarp = gameplayMode === 'free' ? player.lightSpeedBeta : 0;
+  const warpUniform = engine.warpPass.uniforms.uWarp;
+  warpUniform.value += (targetWarp - warpUniform.value) * Math.min(1, dt * 3);
   if (gameplayMode === 'free' && player.canLand()) {
     interactPrompt.innerHTML = 'Presiona <b>F</b> para aterrizar';
     interactPrompt.classList.remove('hidden');
@@ -760,6 +776,7 @@ engine.addUpdater(dt => {
   engine.camera.getWorldPosition(_camWorld);
   sky.position.copy(_camWorld);   // el cielo sigue a la cámara (skybox)
   spaceEnv.stars.userData.uniforms.uTime.value += dt;
+  spaceEnv.update(dt);
   cockpit.update(dt, player);
   if (gameplayMode === 'solar') solar.update(dt);
   hud.update(dt);
