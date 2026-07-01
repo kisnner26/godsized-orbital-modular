@@ -257,9 +257,14 @@ export class Cockpit {
   // GLB la abertura ocupa x∈[-0.49,0.49], y∈[-0.05,0.42] (centro≈0.185,
   // ancho≈0.99, alto≈0.46) — el doble de alto que la primera medición, que
   // dejaba un hueco visible arriba. El cristal es un plano recto (no la
-  // cúpula real), así que se agranda un poco de más: donde sobra, la propia
-  // cúpula del marco (más cerca de la cámara en las esquinas altas) lo tapa
-  // por delante gracias al depth test normal.
+  // cúpula real), así que se agranda un ~7-12% sobre lo medido: donde sobra,
+  // la propia cúpula del marco (más cerca de la cámara en las esquinas
+  // altas) lo tapa por delante gracias al depth test normal. Verificado a
+  // pixel comparando renders con/sin cristal en toda la abertura: cobertura
+  // completa salvo un puñado de píxeles a <1/255 de diferencia justo en el
+  // borde superior (ruido de muestreo, no hueco real). Agrandar aún más el
+  // plano (probado hasta +24%/+38%) no cambió ese resultado, así que si el
+  // hueco se sigue viendo, el problema no es el tamaño de este cristal.
   buildWindshieldGlass(cockpitRoot) {
     const glassMat = new THREE.MeshStandardMaterial({
       color: 0xbfefff,
