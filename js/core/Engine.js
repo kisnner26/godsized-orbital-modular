@@ -41,14 +41,22 @@ const WARP_SHADER = {
 };
 
 export class Engine {
-  constructor(canvas) {
+  constructor(canvas, opts = {}) {
     this.canvas = canvas;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x01040a);
     this.camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.02, 8000);
     this.camera.position.set(0, 1.55, 1.2);
 
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    // antialias solo puede decidirse al crear el contexto: el preset
+    // "Rendimiento" guardado lo desactiva en la siguiente carga (main.js lee
+    // localStorage antes de construir el motor).
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: opts.antialias !== false,
+      powerPreference: 'high-performance',
+      stencil: false,
+    });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -68,7 +76,48 @@ export class Engine {
     this.updaters = [];
     this.worldSystems = [];   // sistemas de mundo (planetas procedurales) montados en el motor
 
+    this.targetFps = 0;       // 0 = sin límite (el rAF va al ritmo nativo)
+    this.detectedHz = 60;     // se mide en detectRefreshRate()
+    this.fps = 60;            // FPS reales suavizados (para mostrar en Ajustes)
+    this._lastFrame = 0;
+
     window.addEventListener('resize', () => this.resize());
+  }
+
+  // Limita los FPS renderizados. Con 0 se vuelve al ritmo nativo del monitor.
+  // En portátiles flojos, saltar frames es la palanca más directa: la física
+  // usa dt real, así que la simulación va igual de rápido con menos carga.
+  setTargetFps(fps) {
+    this.targetFps = Math.max(0, Number(fps) || 0);
+  }
+
+  shouldUseComposer() {
+    return !!(this.bloom?.enabled || this.warpPass?.enabled);
+  }
+
+  // Mide la frecuencia nativa del monitor muestreando deltas de rAF (no hay
+  // API directa). Mediana de ~24 frames redondeada al estándar más cercano.
+  detectRefreshRate() {
+    return new Promise(resolve => {
+      const deltas = [];
+      let prev = 0;
+      const sample = (t) => {
+        if (prev) deltas.push(t - prev);
+        prev = t;
+        if (deltas.length < 24) { requestAnimationFrame(sample); return; }
+        deltas.sort((a, b) => a - b);
+        const median = deltas[Math.floor(deltas.length / 2)];
+        const raw = 1000 / Math.max(1, median);
+        const standards = [60, 75, 90, 120, 144, 165, 240];
+        let hz = standards[0];
+        for (const s of standards) if (Math.abs(s - raw) < Math.abs(hz - raw)) hz = s;
+        // pantallas por debajo de 60 (o navegador limitando): usa la medida
+        if (raw < 55) hz = Math.max(24, Math.round(raw));
+        this.detectedHz = hz;
+        resolve(hz);
+      };
+      requestAnimationFrame(sample);
+    });
   }
 
   // Monta un sistema de mundo (p.ej. sistemas procedurales de Exploración)
@@ -89,13 +138,26 @@ export class Engine {
   addUpdater(fn) { this.updaters.push(fn); }
 
   start() {
-    const tick = () => {
+    const tick = (now) => {
       requestAnimationFrame(tick);
+      // Limitador de FPS: si aún no toca renderizar este frame, salir sin
+      // tocar nada. clock.getDelta() del frame que SÍ corre devuelve el
+      // tiempo real acumulado, así que la simulación no se ralentiza.
+      if (this.targetFps > 0) {
+        const interval = 1000 / this.targetFps;
+        if (now - this._lastFrame < interval - 0.75) return;
+        // avanza en múltiplos del intervalo para no acumular deriva
+        this._lastFrame = now - ((now - this._lastFrame) % interval);
+      } else {
+        this._lastFrame = now;
+      }
       const dt = Math.min(this.clock.getDelta(), 0.05);
+      if (dt > 0) this.fps += (1 / dt - this.fps) * 0.06;   // medidor suavizado
       for (const fn of this.updaters) fn(dt);
       for (const sys of this.worldSystems) sys.update(dt);   // planetas procedurales
-      this.composer.render();
+      if (this.shouldUseComposer()) this.composer.render();
+      else this.renderer.render(this.scene, this.camera);
     };
-    tick();
+    requestAnimationFrame(tick);
   }
 }
