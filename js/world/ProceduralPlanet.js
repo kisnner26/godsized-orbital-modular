@@ -396,6 +396,18 @@ export class ProceduralPlanet {
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     geometry.setIndex(indices);
     geometry.computeBoundingSphere();
+    // El vértex shader desplaza cada vértice de la esfera unitaria hacia
+    // fuera, hasta uRadius+h (con h en ±terrainAmplitude aprox.) — pero
+    // Three.js no sabe nada de eso: su frustum culling usa el bounding
+    // sphere calculado arriba, sobre la geometría SIN desplazar (radio ~1).
+    // Sin corregirlo, esa esfera diminuta casi nunca coincide con dónde
+    // termina apareciendo el parche real en pantalla, así que el culling
+    // descarta parches que sí deberían verse — el terreno "desaparece" de
+    // cerca. Escalamos el bounding sphere por (radius+amplitud) para que
+    // cubra de forma conservadora el rango real del desplazamiento.
+    const reach = this.radius + this.terrainAmplitude;
+    geometry.boundingSphere.center.multiplyScalar(reach);
+    geometry.boundingSphere.radius *= reach;
     return geometry;
   }
 
@@ -488,9 +500,24 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
+// Puerto exacto de hash31() en TERRAIN_GLSL (arriba en este mismo archivo).
+// ¡Debe coincidir bit a bit en estructura con la versión GLSL! Antes esta
+// función usaba un hash distinto (seno + 43758.5453123): dos algoritmos de
+// ruido diferentes que, aunque con la misma estructura de fbm/ridged por
+// encima, generan campos de ruido completamente distintos. Eso hacía que el
+// terreno "de verdad" (el que ve la nave/el jugador al aterrizar, calculado
+// aquí en la CPU) no coincidiera con el terreno que se ve en pantalla (el
+// del shader, en la GPU): la nave podía flotar sobre — o hundirse en — un
+// suelo que visualmente no estaba ahí.
+function fract(x) { return x - Math.floor(x); }
+
 function hash3(x, y, z) {
-  let n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453123;
-  return n - Math.floor(n);
+  let px = fract(x * 0.1031);
+  let py = fract(y * 0.1031);
+  let pz = fract(z * 0.1031);
+  const d = px * (py + 33.33) + py * (pz + 33.33) + pz * (px + 33.33);
+  px += d; py += d; pz += d;
+  return fract((px + py) * pz);
 }
 
 function noise3(x, y, z) {

@@ -3,16 +3,16 @@ import { Engine } from './core/Engine.js?v=world';
 import { Input } from './systems/Input.js?v=noMouse';
 import { GamepadController } from './systems/Gamepad.js?v=turbo';
 import { ModelLoader } from './systems/ModelLoader.js';
-import { Narrator } from './systems/Narrator.js?v=radio';
+import { Narrator } from './systems/Narrator.js?v=queue1';
 import { ShipAudio } from './systems/ShipAudio.js?v=esc';
-import { Player } from './world/Player.js?v=turbo5';
-import { Cockpit } from './world/Cockpit.js?v=glass8';
-import { SolarSystem } from './world/SolarSystem.js?v=flare1';
-import { FreeExploration } from './world/FreeExploration.js?v=exploration2';
-import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=twinkle1';
+import { Player } from './world/Player.js?v=onfoot2';
+import { Cockpit } from './world/Cockpit.js?v=onfoot1';
+import { SolarSystem } from './world/SolarSystem.js?v=sunlife1';
+import { FreeExploration } from './world/FreeExploration.js?v=cullfix1';
+import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=constell1';
 import { HUD } from './ui/HUD.js?v=speedo2';
-import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=facts1';
-import { GuidedLesson } from './ui/GuidedLesson.js?v=4';
+import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=facts2';
+import { GuidedLesson } from './ui/GuidedLesson.js?v=5';
 
 const canvas = document.getElementById('game');
 const boot = document.getElementById('boot');
@@ -40,6 +40,10 @@ const cinematic = document.getElementById('cinematic');
 const lessonLaunch = document.getElementById('lessonLaunch');
 const lessonPanel = document.getElementById('lessonPanel');
 const lessonDiagram = document.getElementById('lessonDiagram');
+const interactPrompt = document.getElementById('interactPrompt');
+const hudToggle = document.getElementById('hudToggle');
+const collapseSunBtn = document.getElementById('collapseSunBtn');
+const restoreSunBtn = document.getElementById('restoreSunBtn');
 let modeSolar = document.getElementById('modeSolar');
 let modeFree = document.getElementById('modeFree');
 let modeStatus = document.getElementById('modeStatus');
@@ -255,7 +259,10 @@ const BODY_PRESETS = [
     line: 'Púlsar: una estrella de neutrones que gira a gran velocidad. Su densidad extrema curva con fuerza las órbitas cercanas.' },
   { label: 'BINARIO', scenario: 'binary', type: 'planet', au: 5.0, v: 26, vz: 0,
     look: { name:'Tierra', url: TEX+'earth_atmos_2048.jpg', radius:.8, rough:.6, atmo:0x63b8ff, colors:['#083777','#1e6a4e','#9cc5ff'] },
-    line: 'Sistema binario: dos estrellas orbitan su centro común y el planeta siente la gravedad combinada de ambas.' }
+    line: 'Sistema binario: dos estrellas orbitan su centro común y el planeta siente la gravedad combinada de ambas.' },
+  { label: 'SOL', scenario: 'sunwobble', type: 'star', au: -0.00496, v: 0.01245, vz: 0,
+    look: { name:'Sol', radius: 1.2 },
+    line: 'Incluso el Sol se mueve: la gravedad de Júpiter lo desplaza en un pequeño círculo, del tamaño de su propio radio, alrededor del centro de masa del sistema solar.' }
 ];
 let currentBodyIndex = 2;
 
@@ -284,6 +291,7 @@ function enterObservation(index) {
   speedo.classList.add('hidden');
   bodySwitcher.classList.remove('hidden');
   systemSpeed.classList.remove('hidden');
+  hudToggle?.classList.remove('hidden');
   document.body.classList.add('is-observation');
   input.unlock();
   cockpit.startObservation();
@@ -293,6 +301,7 @@ function enterObservation(index) {
   solar.setVectorsVisible(true);
   updateBodySwitcher();
   lesson.setEarthAvailable(b.label === 'TIERRA');
+  collapseSunBtn?.classList.toggle('hidden', b.label !== 'SOL');
   if (missionTitle) missionTitle.textContent = `OBSERVACIÓN / ${b.label}`;
   narrator.say(b.line, 7000);
 }
@@ -330,6 +339,9 @@ function exitObserveMode() {
   systemSpeed.classList.add('hidden');
   cinematic.classList.add('hidden');
   studyMenu.classList.add('hidden');
+  collapseSunBtn?.classList.add('hidden');
+  hudToggle?.classList.add('hidden');
+  setObservationHudCollapsed(false);
   physics.hide();
   solar.setVectorsVisible(false);
   solar.setScenario('solar');
@@ -351,6 +363,38 @@ function exitObserveMode() {
     5200
   );
 }
+
+// Experimento mental: ¿qué pasaría si el Sol colapsara en un agujero negro?
+// Respuesta correcta (y contraintuitiva): si conserva su masa, nada cambia
+// para las órbitas — F = G·M·m/r² solo depende de masa y distancia, nunca
+// del tamaño del objeto. Lo mostramos volviendo a la vista general para que
+// se vean los ocho planetas siguiendo exactamente la misma órbita.
+function explainSunCollapse() {
+  solar.setSunCollapsed(true);
+  exitObserveMode();
+  narrator.say(
+    'Si el Sol colapsara en un agujero negro conservando toda su masa, la gravedad sobre los planetas no cambiaría en nada: la ley de gravitación universal depende de la masa y la distancia, nunca del tamaño del objeto. Mira el sistema: las ocho órbitas siguen exactamente igual. Solo cambiarían si el Sol perdiera masa en el proceso.',
+    11000
+  );
+  restoreSunBtn?.classList.remove('hidden');
+}
+
+restoreSunBtn?.addEventListener('click', () => {
+  solar.setSunCollapsed(false);
+  restoreSunBtn.classList.add('hidden');
+  narrator.say('El Sol vuelve a la normalidad. Las órbitas nunca dejaron de ser las mismas.', 4500);
+});
+
+collapseSunBtn?.addEventListener('click', explainSunCollapse);
+
+// HUD de observación: "×" para ocultarlo todo y apreciar solo el universo.
+function setObservationHudCollapsed(collapsed) {
+  document.body.classList.toggle('is-hud-collapsed', collapsed);
+  if (hudToggle) hudToggle.textContent = collapsed ? '☰' : '×';
+}
+hudToggle?.addEventListener('click', () => {
+  setObservationHudCollapsed(!document.body.classList.contains('is-hud-collapsed'));
+});
 
 function setGameplayMode(mode) {
   if (mode !== 'solar' && mode !== 'free') return;
@@ -487,6 +531,32 @@ function toggleFlightView() {
   if (player.mode === 'flight') setFlightView(!player.firstPerson);
 }
 
+// Aterrizar / volver a bordo (tecla F), solo tiene efecto en Exploración:
+// aterrizando sobre suelo rocoso ya casi detenida, o a pie cerca de donde
+// quedó la nave.
+function tryInteract() {
+  if (player.canLand()) {
+    player.land();
+    cockpit.showLandedMarker(player.parkedShip.position, player.parkedShip.quaternion);
+    cockpit.startOnFoot();
+    input.lock();
+    speedo.classList.add('hidden');
+    speedControl.classList.add('hidden');
+    if (missionTitle) missionTitle.textContent = 'A PIE / EXPLORACIÓN SUPERFICIE';
+    updateControlsHint();
+    narrator.say('Aterrizaje completado. Traje presurizado: puedes salir a explorar la superficie a pie.', 6500);
+  } else if (player.canBoard()) {
+    cockpit.hideLandedMarker();
+    player.board();
+    cockpit.startFlight();
+    speedo.classList.remove('hidden');
+    speedControl.classList.remove('hidden');
+    if (missionTitle) missionTitle.textContent = 'ORION-07 / EXPLORACION';
+    updateControlsHint();
+    narrator.say('De vuelta a bordo. Motores listos para despegar.', 4200);
+  }
+}
+
 // Rueda del ratón: zoom en observación.
 input.onWheel = (deltaY) => {
   if (player.mode === 'observe') player.zoomObservation(deltaY > 0 ? 1.08 : 0.93);
@@ -502,7 +572,7 @@ input.onKeyDown = (code) => {
   if (paused) return;
   if (code === 'KeyC' && gameplayMode === 'solar') panel.classList.toggle('hidden');
   if (code === 'KeyV') toggleFlightView();
-  if (code === 'KeyM') player.toggleTurbo();
+  if (code === 'KeyF' && gameplayMode === 'free') tryInteract();
   if (code === 'Equal' || code === 'NumpadAdd') setMaxSpeed(Number(maxSpeed.value) + 10);
   if (code === 'Minus' || code === 'NumpadSubtract') setMaxSpeed(Number(maxSpeed.value) - 10);
   const canSelect = !studyMenu.classList.contains('hidden') || player.mode === 'observe';
@@ -511,6 +581,7 @@ input.onKeyDown = (code) => {
   if (player.mode === 'observe') {
     if (code === 'ArrowLeft') cycleBody(-1);
     if (code === 'ArrowRight') cycleBody(1);
+    if (code === 'KeyH') setObservationHudCollapsed(!document.body.classList.contains('is-hud-collapsed'));
   }
 };
 
@@ -578,7 +649,7 @@ function setSystemSpeed(v) {
 sysSpeedSlider.addEventListener('input', () => setSystemSpeed(sysSpeedSlider.value));
 document.getElementById('sysSpeedDown').addEventListener('click', () => setSystemSpeed(Number(sysSpeedSlider.value) - 0.2));
 document.getElementById('sysSpeedUp').addEventListener('click', () => setSystemSpeed(Number(sysSpeedSlider.value) + 0.2));
-setSystemSpeed(1);
+setSystemSpeed(0.2);
 
 // ---- Selector de cuerpos (modo observación) ----
 BODY_PRESETS.forEach(b => {
@@ -599,7 +670,6 @@ const gamepad = new GamepadController(input, {
   togglePause: () => toggleSettings(),
   togglePanel: () => { if (gameplayMode === 'solar') panel.classList.toggle('hidden'); },
   toggleView: () => toggleFlightView(),
-  toggleTurbo: () => player.toggleTurbo(),
   cycleBody: (d) => cycleBody(d),
   zoom: (f) => { if (player.mode === 'observe') player.zoomObservation(f); },
   exitObserve: () => { if (player.mode === 'observe') exitObserveMode(); },
@@ -624,14 +694,18 @@ const HINTS = {
   free: [
     ['L-Stick / ←→↑↓', 'Girar'], ['R2 / ✕', 'Acelerar'], ['L2 / ◯', 'Frenar'],
     ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Impulso'],
-    ['M / R3', 'Turbo x5'], ['V', '1ª / 3ª persona']
+    ['M / R3', 'Turbo x5'], ['V', '1ª / 3ª persona'], ['F', 'Aterrizar (sobre suelo rocoso)']
+  ],
+  onfoot: [
+    ['W A S D', 'Caminar'], ['←→↑↓', 'Girar / Mirar'], ['Shift', 'Correr'],
+    ['Espacio', 'Saltar'], ['F', 'Volver a la nave']
   ],
   observe: [
-    ['D-Pad ◀ ▶', 'Cambiar cuerpo'], ['Rueda / L2 R2', 'Zoom'], ['◯', 'Salir'], ['C', 'Condiciones']
+    ['D-Pad ◀ ▶', 'Cambiar cuerpo'], ['Rueda / L2 R2', 'Zoom'], ['◯', 'Salir'], ['C', 'Condiciones'], ['H', 'Ocultar HUD']
   ]
 };
 function updateControlsHint() {
-  const mode = player.mode === 'observe' ? 'observe' : gameplayMode === 'free' ? 'free' : 'flight';
+  const mode = player.mode === 'observe' ? 'observe' : player.mode === 'onfoot' ? 'onfoot' : gameplayMode === 'free' ? 'free' : 'flight';
   const rows = HINTS[mode];
   const head = padConnected ? '' : '<span class="hint__kb">Mando o teclado</span>';
   controlsHint.innerHTML = head + rows.map(
@@ -662,10 +736,20 @@ engine.addUpdater(dt => {
   if (player.mode !== hintMode) {
     hintMode = player.mode;
     updateControlsHint();
-    const showHint = player.mode === 'flight' || player.mode === 'observe';
+    const showHint = player.mode === 'flight' || player.mode === 'observe' || player.mode === 'onfoot';
     controlsHint.classList.toggle('hidden', !showHint);
   }
+  player.setTurbo(input.keys.KeyM);
   player.update(dt);
+  if (gameplayMode === 'free' && player.canLand()) {
+    interactPrompt.innerHTML = 'Presiona <b>F</b> para aterrizar';
+    interactPrompt.classList.remove('hidden');
+  } else if (gameplayMode === 'free' && player.canBoard()) {
+    interactPrompt.innerHTML = 'Presiona <b>F</b> para volver a la nave';
+    interactPrompt.classList.remove('hidden');
+  } else {
+    interactPrompt.classList.add('hidden');
+  }
   shipEventCooldown = Math.max(0, shipEventCooldown - dt);
   if (gameplayMode === 'free' && player.statusEvent && player.statusEvent !== lastShipEvent && shipEventCooldown <= 0) {
     lastShipEvent = player.statusEvent;

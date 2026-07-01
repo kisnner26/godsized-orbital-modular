@@ -77,7 +77,19 @@ const PLANET_FACTS = {
     ['MASA DE CADA ESTRELLA', '2 M☉ ≈ 4.0 × 10³⁰ kg'], ['SEPARACIÓN', '6 AU (≈898 millones km)'],
     ['TIPO DE SISTEMA', 'binario estelar (órbita mutua)'], ['FRECUENCIA EN LA GALAXIA', '≈50% de las estrellas tienen compañera'],
     ['EJEMPLO REAL', 'Alfa Centauri A/B']
-  ], note: 'Cada estrella orbita el centro de masa común del par, igual que el planeta ficticio de esta escena orbita a ambas.' }
+  ], note: 'Cada estrella orbita el centro de masa común del par, igual que el planeta ficticio de esta escena orbita a ambas.' },
+  'SOL': { rows: [
+    ['MASA', '1.989 × 10³⁰ kg'], ['RADIO', '696 000 km'], ['GRAVEDAD SUP.', '274 m/s²'],
+    ['PERIODO DE BAMBOLEO', '≈11.86 años (el de Júpiter)'], ['ROTACIÓN', '≈25-35 días (diferencial)'], ['PLANETAS', '8'],
+    ['TEMPERATURA SUP.', '≈5 505°C'], ['VEL. DE ESCAPE', '617.5 km/s']
+  ], note: 'El Sol tampoco está quieto: la gravedad conjunta de los planetas, sobre todo Júpiter, lo desplaza en un pequeño círculo de radio similar al suyo propio alrededor del centro de masa del sistema solar.' }
+};
+
+// A qué apunta el vector de aceleración/fuerza según el escenario (el texto
+// "hacia el Sol" sería incorrecto o confuso, p. ej., al observar el propio Sol).
+const ATTRACTOR_LABEL = {
+  solar: 'el Sol', massive: 'la estrella masiva', pulsar: 'el púlsar',
+  sunwobble: 'Júpiter', binary: 'el centro de masa'
 };
 
 export class PhysicsOverlay {
@@ -147,10 +159,11 @@ export class PhysicsOverlay {
     // ----- Ecuaciones con valores sustituidos -----
     const m = s.mass;
     const Mtxt = s.nAttractors > 1 ? `${fmt(s.M,2)}*` : fmt(s.M,2);  // * = masa total (binario)
+    const towardLabel = ATTRACTOR_LABEL[this.solar.scenario] || 'el Sol';
     if (this.eqF) this.eqF.innerHTML =
       `F = G·M·m / r² = (6.674e-11)(${Mtxt})(${fmt(m,1)}) / (${fmt(s.r,2)})² = <b>${fmt(s.F,2)} N</b>`;
     if (this.eqA) this.eqA.innerHTML =
-      `a = F / m = G·M / r² = <b>${fmt(s.aMag,3)} m/s²</b>  (hacia el Sol)`;
+      `a = F / m = G·M / r² = <b>${fmt(s.aMag,3)} m/s²</b>  (hacia ${towardLabel})`;
     if (this.eqV) this.eqV.innerHTML =
       `v = v₀ + a·Δt  →  |v| = <b>${fmt(s.speedKms,2)} km/s</b>`;
     if (this.eqR) this.eqR.innerHTML =

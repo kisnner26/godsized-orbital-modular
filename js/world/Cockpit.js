@@ -491,8 +491,40 @@ export class Cockpit {
     this.applyFlightView();
   }
 
+  // Marcador de "nave aparcada": un clon de la nave real (comparte geometría
+  // y materiales, así que clonarla es barato) colocado en un punto fijo del
+  // mundo mientras el jugador explora a pie — se ve la Orion-07 tal cual,
+  // esperando exactamente donde aterrizó, en vez de un marcador genérico.
+  showLandedMarker(position, quaternion) {
+    if (!this.landedMarker && this.ship) {
+      this.landedMarker = this.ship.clone(true);
+      this.landedMarker.name = 'ORION_07_LANDED_MARKER';
+      this.landedMarker.traverse(o => { if (o.isLight) o.intensity *= 0.6; });
+      this.scene.add(this.landedMarker);
+    }
+    if (!this.landedMarker) return;
+    this.landedMarker.position.copy(position);
+    this.landedMarker.quaternion.copy(quaternion);
+    this.landedMarker.visible = true;
+  }
+
+  hideLandedMarker() {
+    if (this.landedMarker) this.landedMarker.visible = false;
+  }
+
   startObservation() {
     // En observación la cámara deja de seguir a la nave: solo se ve el cuerpo celeste.
+    if (this.cockpit) this.cockpit.visible = false;
+    if (this.arms) this.arms.visible = false;
+    if (this.ship) this.ship.visible = false;
+    if (this.shipProxy) this.shipProxy.visible = false;
+    if (this.thrusters) this.thrusters.visible = false;
+    if (this.interiorLights) this.interiorLights.forEach(l => l.intensity = 0);
+  }
+
+  // A pie: la cámara ya no es la nave, así que se ocultan cabina, brazos,
+  // nave y toberas — solo queda visible el marcador de nave aparcada.
+  startOnFoot() {
     if (this.cockpit) this.cockpit.visible = false;
     if (this.arms) this.arms.visible = false;
     if (this.ship) this.ship.visible = false;

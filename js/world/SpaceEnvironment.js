@@ -91,21 +91,91 @@ export function buildSpaceEnvironment(scene) {
 
   // Nebulosas de color muy lejanas (textura con desvanecido radial: sin bordes duros)
   const nebTex = makeNebulaTexture();
-  const nebColors = [0x5566ff, 0xff4488, 0x33ddbb, 0x8844ff, 0xff8844];
-  for (let i=0;i<5;i++) {
+  const nebColors = [0x5566ff, 0xff4488, 0x33ddbb, 0x8844ff, 0xff8844, 0x2ad4ff, 0xff2f6e, 0x8cff5c];
+  for (let i=0;i<nebColors.length;i++) {
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: nebTex, color: nebColors[i], transparent:true, opacity:0.12 + Math.random()*0.06,
+      map: nebTex, color: nebColors[i], transparent:true, opacity:0.11 + Math.random()*0.07,
       blending: THREE.AdditiveBlending, depthWrite:false
     }));
     const r = 3000;
     const th = Math.random()*Math.PI*2, ph = Math.acos(2*Math.random()-1);
     spr.position.set(r*Math.sin(ph)*Math.cos(th), r*Math.sin(ph)*Math.sin(th)*0.6, r*Math.cos(ph));
-    const s = 1400 + Math.random()*1400;
+    const s = 1300 + Math.random()*1500;
     spr.scale.set(s, s, 1);
     sky.add(spr);
   }
 
-  return { sky, stars, milky };
+  const constellations = makeConstellations();
+  sky.add(constellations);
+
+  return { sky, stars, milky, constellations };
+}
+
+// Constelaciones estilizadas (Orión, Osa Mayor, Casiopea, Cisne) dibujadas
+// como líneas + estrellas brillantes muy lejanas, siguiendo a la cámara igual
+// que el resto del cielo. Guiño temático: la nave se llama Orion-07.
+const CONSTELLATION_SHAPES = {
+  Orion: [[[-1.4,2.0],[-0.5,0.2]],[[1.3,2.1],[0.5,0.1]],[[-0.5,0.2],[0,0.15]],[[0,0.15],[0.5,0.1]],[[-0.5,0.2],[-1.1,-2.0]],[[0.5,0.1],[1.2,-2.1]]],
+  'Osa Mayor': [[[-2.2,0.6],[-1.3,0.9]],[[-1.3,0.9],[-0.4,0.75]],[[-0.4,0.75],[0.5,0.4]],[[0.5,0.4],[-2.2,0.6]],[[0.5,0.4],[1.4,0.9]],[[1.4,0.9],[2.3,1.5]],[[2.3,1.5],[3.0,1.0]]],
+  Casiopea: [[[-2,0],[-1,1]],[[-1,1],[0,0.2]],[[0,0.2],[1,1.1]],[[1,1.1],[2,0.1]]],
+  Cisne: [[[0,2],[0,0]],[[0,0],[0,-2]],[[-1.6,0],[0,0]],[[0,0],[1.6,0]]]
+};
+
+function makeConstellations() {
+  const group = new THREE.Group();
+  const R = 3400;
+  const scale = 90;
+  const lineMat = new THREE.LineBasicMaterial({ color: 0xcfe8ff, transparent:true, opacity:0.24, blending:THREE.AdditiveBlending, depthWrite:false });
+  const starTex = makeDotTexture();
+  const names = Object.keys(CONSTELLATION_SHAPES);
+  const up0 = new THREE.Vector3(0,1,0);
+
+  names.forEach((name, i) => {
+    const segs = CONSTELLATION_SHAPES[name];
+    const theta = (i / names.length) * Math.PI * 2 + Math.random() * 0.5;
+    const phi = Math.PI * 0.26 + Math.random() * Math.PI * 0.48;
+    const dir = new THREE.Vector3(Math.sin(phi)*Math.cos(theta), Math.cos(phi), Math.sin(phi)*Math.sin(theta));
+    const right = new THREE.Vector3().crossVectors(Math.abs(dir.y) > 0.98 ? new THREE.Vector3(1,0,0) : up0, dir).normalize();
+    const up = new THREE.Vector3().crossVectors(dir, right).normalize();
+    const base = dir.clone().multiplyScalar(R);
+
+    const project = (x, y) => base.clone().addScaledVector(right, x*scale).addScaledVector(up, y*scale).normalize().multiplyScalar(R);
+
+    const pts = [];
+    for (const [[x1,y1],[x2,y2]] of segs) pts.push(project(x1,y1), project(x2,y2));
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    group.add(new THREE.LineSegments(geo, lineMat));
+
+    const uniquePts = [];
+    for (const p of pts) if (!uniquePts.some(q => q.distanceToSquared(p) < 1)) uniquePts.push(p);
+    for (const p of uniquePts) {
+      const star = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: starTex, color: 0xeaf6ff, transparent:true, opacity:0.8 + Math.random()*0.15,
+        blending: THREE.AdditiveBlending, depthWrite:false
+      }));
+      star.position.copy(p);
+      const s = 13 + Math.random()*11;
+      star.scale.set(s, s, 1);
+      group.add(star);
+    }
+  });
+
+  return group;
+}
+
+function makeDotTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 64;
+  const ctx = cv.getContext('2d');
+  const g = ctx.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.4, 'rgba(210,235,255,.6)');
+  g.addColorStop(1, 'rgba(210,235,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,64,64);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 function makeNebulaTexture() {
