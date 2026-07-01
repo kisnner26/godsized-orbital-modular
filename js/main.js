@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { Engine } from './core/Engine.js?v=warp1';
-import { Input } from './systems/Input.js?v=noMouse';
-import { GamepadController } from './systems/Gamepad.js?v=turbo';
+import { Input } from './systems/Input.js?v=padfeel1';
+import { GamepadController } from './systems/Gamepad.js?v=padfeel2';
 import { ModelLoader } from './systems/ModelLoader.js';
 import { Narrator } from './systems/Narrator.js?v=queue1';
 import { ShipAudio } from './systems/ShipAudio.js?v=esc';
 import { Radio } from './systems/Radio.js?v=1';
-import { Player } from './world/Player.js?v=autoland1';
+import { Player } from './world/Player.js?v=padfeel1';
 import { Cockpit } from './world/Cockpit.js?v=astronaut1';
 import { SolarSystem } from './world/SolarSystem.js?v=twoearths1';
 import { FreeExploration } from './world/FreeExploration.js?v=scale1';
@@ -14,6 +14,7 @@ import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=galaxies1';
 import { HUD } from './ui/HUD.js?v=lightspeed1';
 import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=facts2';
 import { GuidedLesson } from './ui/GuidedLesson.js?v=5';
+import { SystemMap2D } from './ui/SystemMap2D.js?v=2';
 
 const canvas = document.getElementById('game');
 const boot = document.getElementById('boot');
@@ -65,6 +66,13 @@ const narrator = new Narrator();
 const shipAudio = new ShipAudio(input, player);
 const radio = new Radio();
 const physics = new PhysicsOverlay(solar);
+const map2d = new SystemMap2D();
+map2d.onToggle = (open) => {
+  if (open) narrator.say(
+    'Mapa a escala real: todos los planetas obedecen la misma ley de gravitación. Fíjate en que los interiores se mueven mucho más rápido que los exteriores.',
+    8000
+  );
+};
 const lesson = new GuidedLesson({
   player, solar, narrator,
   launchBtn: lessonLaunch,
@@ -80,12 +88,15 @@ const lesson = new GuidedLesson({
     bodySwitcher.classList.add('hidden');
     systemSpeed.classList.add('hidden');
     controlsHint.classList.add('hidden');
+    map2d.hide();
+    map2d.setButtonVisible(false);
   },
   onStop: () => {
     if (player.mode === 'observe') {
       bodySwitcher.classList.remove('hidden');
       systemSpeed.classList.remove('hidden');
       controlsHint.classList.remove('hidden');
+      map2d.setButtonVisible(true);
       updateBodySwitcher();
     }
   }
@@ -304,6 +315,7 @@ function enterObservation(index) {
   bodySwitcher.classList.remove('hidden');
   systemSpeed.classList.remove('hidden');
   hudToggle?.classList.remove('hidden');
+  map2d.setButtonVisible(true);
   document.body.classList.add('is-observation');
   input.unlock();
   cockpit.startObservation();
@@ -355,6 +367,8 @@ function exitObserveMode() {
   collapseSunBtn?.classList.add('hidden');
   hudToggle?.classList.add('hidden');
   setObservationHudCollapsed(false);
+  map2d.hide();
+  map2d.setButtonVisible(false);
   physics.hide();
   solar.setVectorsVisible(false);
   solar.setObservationMode(false);
@@ -633,6 +647,7 @@ input.onKeyDown = (code) => {
     if (code === 'ArrowLeft') cycleBody(-1);
     if (code === 'ArrowRight') cycleBody(1);
     if (code === 'KeyH') setObservationHudCollapsed(!document.body.classList.contains('is-hud-collapsed'));
+    if (code === 'KeyM') map2d.toggle();
   }
 };
 
@@ -724,6 +739,8 @@ const gamepad = new GamepadController(input, {
   cycleBody: (d) => cycleBody(d),
   zoom: (f) => { if (player.mode === 'observe') player.zoomObservation(f); },
   exitObserve: () => { if (player.mode === 'observe') exitObserveMode(); },
+  interact: () => tryInteract(),
+  toggleMap: () => { if (player.mode === 'observe') map2d.toggle(); },
   onConnect: (name) => {
     padConnected = true;
     padToast.textContent = `🎮 ${name} conectado`;
@@ -740,19 +757,20 @@ const HINTS = {
   flight: [
     ['L-Stick / ←→↑↓', 'Girar'], ['R2 / ✕', 'Acelerar'], ['L2 / ◯', 'Frenar'],
     ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Impulso'],
-    ['M / R3', 'Turbo x5'], ['D-Pad ↑↓', 'Velocidad'], ['V', '1ª / 3ª persona'], ['Options', 'Panel']
+    ['M / R3', 'Turbo x5'], ['D-Pad ↑↓', 'Velocidad'], ['V / D-Pad ▶', '1ª / 3ª persona'], ['Options', 'Panel']
   ],
   free: [
     ['L-Stick / ←→↑↓', 'Girar'], ['R2 / ✕', 'Acelerar'], ['L2 / ◯', 'Frenar'],
     ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Impulso'],
-    ['M / R3', 'Turbo x5'], ['V', '1ª / 3ª persona'], ['L', 'Velocidad luz']
+    ['M / R3', 'Turbo x5'], ['V / D-Pad ▶', '1ª / 3ª persona'], ['L', 'Velocidad luz']
   ],
   onfoot: [
-    ['W A S D', 'Caminar'], ['←→↑↓', 'Girar / Mirar'], ['Shift', 'Correr'],
-    ['Espacio', 'Saltar'], ['F', 'Volver a la nave']
+    ['L-Stick / WASD', 'Caminar'], ['R-Stick / ←→↑↓', 'Girar / Mirar'], ['L1 / Shift', 'Correr'],
+    ['✕ / Espacio', 'Saltar'], ['△ / F', 'Volver a la nave'], ['▢', '1ª / 3ª persona']
   ],
   observe: [
-    ['D-Pad ◀ ▶', 'Cambiar cuerpo'], ['Rueda / L2 R2', 'Zoom'], ['◯', 'Salir'], ['C', 'Condiciones'], ['H', 'Ocultar HUD']
+    ['D-Pad ◀ ▶', 'Cambiar cuerpo'], ['Rueda / L2 R2', 'Zoom'], ['◯', 'Salir'], ['C', 'Condiciones'],
+    ['M / R3', 'Mapa 2D'], ['H', 'Ocultar HUD']
   ]
 };
 function updateControlsHint() {
@@ -816,6 +834,7 @@ engine.addUpdater(dt => {
   spaceEnv.update(dt);
   cockpit.update(dt, player);
   if (gameplayMode === 'solar') solar.update(dt);
+  if (gameplayMode === 'solar') map2d.update(dt, solar.timeScale);
   hud.update(dt);
   if (gameplayMode === 'solar') physics.update(dt);
   if (gameplayMode === 'solar') lesson.update(dt);
