@@ -319,6 +319,33 @@ export class Cockpit {
     this.windshieldGlass = glass;
   }
 
+  // El export de Meshy trae, fusionado en la misma malla única de la cabina,
+  // un soporte/caja de equipo que cuelga justo en el hueco del parabrisas
+  // (centro-arriba). Al ser una sola malla sin sub-objetos ni grupos de
+  // materiales no se puede ocultar con visible=false ni por material aparte;
+  // en su lugar se descartan sus fragmentos en el shader según su posición
+  // local (caja medida por barrido de raycasting: x∈[-0.19,0.17],
+  // y∈[0.39,0.54], z∈[-0.57,-0.29]). Detrás no queda vacío: ahí mismo pasa
+  // el cristal del parabrisas, así que el hueco se ve como más ventana, no
+  // como un agujero — confirmado comparando renders con/sin este parche.
+  maskInteriorObstruction(cockpitRoot) {
+    let hull = null;
+    cockpitRoot.traverse(o => { if (o.isMesh && o.geometry?.type !== 'PlaneGeometry') hull = o; });
+    if (!hull) return;
+    hull.material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vLocalPos;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLocalPos = position;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vLocalPos;')
+        .replace('#include <clipping_planes_fragment>',
+          '#include <clipping_planes_fragment>\n' +
+          'if (vLocalPos.x > -0.19 && vLocalPos.x < 0.17 && vLocalPos.y > 0.39 && vLocalPos.y < 0.54 && ' +
+          'vLocalPos.z > -0.57 && vLocalPos.z < -0.29) discard;');
+    };
+    hull.material.needsUpdate = true;
+  }
+
   async loadAll(shipRig, camera) {
     // Cabina de pod para PRIMERA PERSONA: tablero abajo, dosel arriba y
     // paneles laterales enmarcando la vista al frente. El parabrisas del
@@ -329,6 +356,7 @@ export class Cockpit {
     cockpit.position.set(0, -2.3, -0.5);
     cockpit.rotation.set(0.42, 0, 0);
     this.buildWindshieldGlass(cockpit);
+    this.maskInteriorObstruction(cockpit);
     shipRig.add(cockpit);
     this.cockpit = cockpit;
 
