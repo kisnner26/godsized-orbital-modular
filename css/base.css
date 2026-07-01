@@ -60,6 +60,12 @@ body.is-observation .panel p{font-size:10px;opacity:.75}
 .physics__vec .vec::before{content:"▸";font-size:11px}
 .physics__vec .vec--v::before{color:#5fff96}
 .physics__vec .vec--a::before{color:#ff6a6a}
+.physics__facts{border-top:1px solid rgba(120,255,230,.16);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.physics__factgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.physics__factgrid>div{padding:7px 9px;background:rgba(0,18,26,.32);border:1px solid rgba(100,255,225,.10)}
+.physics__factgrid span{display:block;font-size:8px;letter-spacing:.14em;color:rgba(100,255,225,.5);margin-bottom:3px}
+.physics__factgrid strong{font-size:12.5px;font-weight:500;color:#eafffb;letter-spacing:.01em}
+.physics__factnote{margin:0;font-size:10px;line-height:1.55;color:rgba(220,255,255,.6);font-style:italic}
 @media (max-height:640px){.physics{font-size:90%}.physics canvas{max-height:90px}}
 
 /* ---------- Aviso de mando conectado ---------- */

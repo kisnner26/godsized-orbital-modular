@@ -90,6 +90,96 @@ export class Cockpit {
     for (const o of ['introShip', 'introKey', 'introRim', 'introAmb']) {
       if (this[o]) { this.scene.remove(this[o]); this[o] = null; }
     }
+    this.despawnMeteor();
+  }
+
+  // Meteoro que cruza cerca de la nave durante el abordaje. La trayectoria es
+  // una recta cuyo punto de máxima aproximación queda deliberadamente a ~9.7
+  // unidades del centro de la nave: la Orion-07 clonada en la intro mide como
+  // mucho 7.4*1.5=11.1 unidades en su eje más largo (radio ≈5.55), así que el
+  // meteoro pasa con un margen amplio y jamás llega a tocarla.
+  spawnMeteorFlyby(shipWorldPos) {
+    this.despawnMeteor();
+
+    const rockGeo = new THREE.IcosahedronGeometry(0.85, 1);
+    const posAttr = rockGeo.attributes.position;
+    for (let i = 0; i < posAttr.count; i++) {
+      const n = 1 + (Math.random() - 0.5) * 0.4;
+      posAttr.setXYZ(i, posAttr.getX(i) * n, posAttr.getY(i) * n, posAttr.getZ(i) * n);
+    }
+    posAttr.needsUpdate = true;
+    rockGeo.computeVertexNormals();
+
+    const rock = new THREE.Mesh(rockGeo, new THREE.MeshStandardMaterial({
+      color: 0x3a2a22, roughness: 0.92, metalness: 0.08,
+      emissive: 0xff5a1e, emissiveIntensity: 1.5
+    }));
+
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: GLOW_TEX, color: 0xffb066, transparent: true, opacity: 0.85,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    glow.scale.set(4.4, 4.4, 1);
+
+    const group = new THREE.Group();
+    group.add(rock, glow);
+    group.visible = false;
+    this.scene.add(group);
+
+    const light = new THREE.PointLight(0xff9a4a, 9, 45, 1.4);
+    group.add(light);
+
+    const trail = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({
+        color: 0xff9a4a, transparent: true, opacity: 0.55,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      })
+    );
+    trail.frustumCulled = false;
+    this.scene.add(trail);
+
+    const closest = shipWorldPos.clone().add(new THREE.Vector3(3, 6, -7));
+    const dir = new THREE.Vector3(1, -0.1, 0.05).normalize();
+    const half = 45;
+
+    this.meteor = {
+      group, rock, trail,
+      start: closest.clone().addScaledVector(dir, -half),
+      end: closest.clone().addScaledVector(dir, half),
+      delay: 0.8, duration: 2.4, elapsed: 0,
+      trailPoints: []
+    };
+  }
+
+  despawnMeteor() {
+    if (!this.meteor) return;
+    const m = this.meteor;
+    this.scene.remove(m.group);
+    this.scene.remove(m.trail);
+    m.rock.geometry.dispose();
+    m.rock.material.dispose();
+    m.trail.geometry.dispose();
+    m.trail.material.dispose();
+    this.meteor = null;
+  }
+
+  updateMeteor(dt) {
+    const m = this.meteor;
+    if (!m) return;
+    m.elapsed += dt;
+    const localT = m.elapsed - m.delay;
+    if (localT < 0) return;
+    if (localT > m.duration) { this.despawnMeteor(); return; }
+
+    m.group.visible = true;
+    const k = localT / m.duration;
+    m.group.position.lerpVectors(m.start, m.end, k);
+    m.rock.rotation.x += dt * 3.2;
+    m.rock.rotation.y += dt * 2.1;
+    m.trailPoints.push(m.group.position.clone());
+    if (m.trailPoints.length > 14) m.trailPoints.shift();
+    m.trail.geometry.setFromPoints(m.trailPoints);
   }
 
   buildThrusters(shipRig) {
@@ -378,6 +468,7 @@ export class Cockpit {
     const t = performance.now();
 
     if (this.introShip) this.introShip.rotation.y += dt * 0.12;   // giro lento en la cinemática
+    this.updateMeteor(dt);
 
     if (this.arms?.visible) {
       const bob = Math.sin(t * 0.004) * 0.006;

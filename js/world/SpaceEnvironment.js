@@ -21,6 +21,8 @@ export function buildSpaceEnvironment(scene) {
   const N = 80000;
   const pos = new Float32Array(N*3);
   const col = new Float32Array(N*3);
+  const phase = new Float32Array(N);
+  const size = new Float32Array(N);
   const color = new THREE.Color();
   for (let i=0;i<N;i++) {
     const r = 900 + Math.random()*2500;
@@ -31,11 +33,51 @@ export function buildSpaceEnvironment(scene) {
     pos[i*3+2] = r*Math.cos(phi);
     color.setHSL(0.56 + Math.random()*0.12, 0.25 + Math.random()*0.25, 0.72 + Math.random()*0.28);
     col[i*3]=color.r; col[i*3+1]=color.g; col[i*3+2]=color.b;
+    phase[i] = Math.random()*62.8;
+    size[i] = 0.8 + Math.random()*1.5;
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
   geo.setAttribute('color', new THREE.BufferAttribute(col,3));
-  const stars = new THREE.Points(geo, new THREE.PointsMaterial({ size:1.2, vertexColors:true, transparent:true, opacity:.92, depthWrite:false }));
+  geo.setAttribute('aPhase', new THREE.BufferAttribute(phase,1));
+  geo.setAttribute('aSize', new THREE.BufferAttribute(size,1));
+
+  // Estrellas con parpadeo sutil: cada una tiene su propia fase (aPhase), así
+  // el brillo y el tamaño oscilan de forma independiente en vez de latir todas
+  // a la vez. El tamaño en pantalla usa la misma atenuación por distancia que
+  // THREE.PointsMaterial (300 / -z) para que se vea igual que antes al volar.
+  const starUniforms = { uTime: { value: 0 } };
+  const starMat = new THREE.ShaderMaterial({
+    uniforms: starUniforms,
+    vertexShader: `
+      attribute vec3 color;
+      attribute float aPhase;
+      attribute float aSize;
+      uniform float uTime;
+      varying vec3 vColor;
+      varying float vTwinkle;
+      void main() {
+        vColor = color;
+        float tw = sin(uTime * (1.4 + fract(aPhase) * 1.6) + aPhase * 3.0) * 0.5 + 0.5;
+        vTwinkle = 0.5 + tw * 0.7;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = aSize * vTwinkle * (300.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }`,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vTwinkle;
+      void main() {
+        vec2 uv = gl_PointCoord - 0.5;
+        float alpha = smoothstep(0.5, 0.0, length(uv));
+        gl_FragColor = vec4(vColor * vTwinkle, alpha * 0.92);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const stars = new THREE.Points(geo, starMat);
+  stars.userData.uniforms = starUniforms;
   sky.add(stars);
 
   const milky = new THREE.Mesh(

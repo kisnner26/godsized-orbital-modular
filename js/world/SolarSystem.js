@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js';
 
 const G = 6.67430e-11;
 const AU = 1.496e11;
@@ -118,6 +119,39 @@ function seededNoise(seed) {
     s = (s * 1664525 + 1013904223) >>> 0;
     return s / 4294967296;
   };
+}
+
+function makeLensflareRingTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  const g = ctx.createRadialGradient(128, 128, 40, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(0.55, 'rgba(180,220,255,0.5)');
+  g.addColorStop(0.72, 'rgba(255,255,255,0.85)');
+  g.addColorStop(0.88, 'rgba(180,220,255,0.35)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Destello de lente reutilizable para cualquier astro luminoso (Sol, estrella
+// masiva, par binario, púlsar): se dibuja siguiendo la línea entre la luz y
+// el centro de pantalla, con halos secundarios a lo largo del trayecto.
+// Three.js lo reposiciona automáticamente cada frame.
+function makeLensflare(color = 0xffffff, mainSize = 640) {
+  const flareMain = makeRadialSpriteTexture('rgba(255,255,255,1)', 'rgba(255,200,120,0)');
+  const flareRing = makeLensflareRingTexture();
+  const lensflare = new Lensflare();
+  lensflare.addElement(new LensflareElement(flareMain, mainSize, 0, new THREE.Color(color)));
+  lensflare.addElement(new LensflareElement(flareRing, mainSize * 0.086, 0.28));
+  lensflare.addElement(new LensflareElement(flareRing, mainSize * 0.133, 0.48));
+  lensflare.addElement(new LensflareElement(flareRing, mainSize * 0.203, 0.68));
+  lensflare.addElement(new LensflareElement(flareRing, mainSize * 0.102, 0.98));
+  return lensflare;
 }
 
 function makeRadialSpriteTexture(colorA='rgba(255,210,90,1)', colorB='rgba(255,80,0,0)') {
@@ -350,6 +384,7 @@ export class SolarSystem {
     const sunLight = new THREE.PointLight(0xffe6c0, 22, 3000, 1.1);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.set(1024, 1024);
+    sunLight.add(makeLensflare(0xffe6c0, 640));
     sun.add(sunLight);
 
     const fill = new THREE.HemisphereLight(0x29405f, 0x050505, 0.32);
@@ -503,7 +538,9 @@ export class SolarSystem {
       spr.scale.set(s, s, 1);
       g.add(spr);
     }
-    g.add(new THREE.PointLight(coreColor, lightI, 5000, 1.0));
+    const light = new THREE.PointLight(coreColor, lightI, 5000, 1.0);
+    light.add(makeLensflare(coreColor, radius * 85));
+    g.add(light);
     g.userData.core = core;
     return g;
   }
@@ -538,7 +575,9 @@ export class SolarSystem {
       spr.scale.set(s, s, 1);
       g.add(spr);
     }
-    g.add(new THREE.PointLight(0xbfe0ff, 24, 3000, 1.0));
+    const light = new THREE.PointLight(0xbfe0ff, 24, 3000, 1.0);
+    light.add(makeLensflare(0xbfe0ff, 260));
+    g.add(light);
     g.userData.beams = beams; g.userData.core = core;
     return g;
   }
