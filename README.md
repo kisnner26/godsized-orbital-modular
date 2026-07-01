@@ -1,5 +1,7 @@
 # GOD-SIZED UNIVERSE — Orion-07 Orbital Flight Sim
 
+![GOD-SIZED UNIVERSE — Simulación de Gravitación Universal y Leyes de Newton](docs/screenshots/cover.png)
+
 **Simulador interactivo de mecánica orbital 3D**, construido para la práctica de **Física Aplicada**:
 
 > *"Dadas ciertas condiciones iniciales de posición y velocidad, y de acuerdo a la Ley de Gravitación Universal y a la Segunda Ley de Newton, simule el movimiento de un planeta o cometa."*

@@ -588,12 +588,33 @@ export class SolarSystem {
     }
   }
 
+  // Libera geometrías/materiales/texturas de un objeto y sus hijos. Sin esto,
+  // cada vez que se observa un cuerpo distinto (makeSimBody se llama de nuevo)
+  // la malla, textura y flechas anteriores quedaban huérfanas en memoria de la
+  // GPU: en una máquina de 8 GB, ciclar entre los 12 cuerpos varias veces
+  // acumulaba decenas de texturas 2048×1024 nunca liberadas.
+  disposeObject3D(obj) {
+    if (!obj) return;
+    obj.traverse(child => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const m of mats) {
+          for (const key of ['map', 'normalMap', 'roughnessMap', 'emissiveMap', 'alphaMap']) {
+            if (m[key]) m[key].dispose();
+          }
+          m.dispose();
+        }
+      }
+    });
+  }
+
   makeSimBody(type, xAU, yAU, zAU, vxKm, vyKm, vzKm, look = {}) {
-    if (this.sim?.mesh) this.group.remove(this.sim.mesh);
-    if (this.trail) this.group.remove(this.trail);
-    if (this.velArrow) this.group.remove(this.velArrow);
-    if (this.accArrow) this.group.remove(this.accArrow);
-    if (this.cometTail) this.group.remove(this.cometTail);
+    if (this.sim?.mesh) { this.group.remove(this.sim.mesh); this.disposeObject3D(this.sim.mesh); }
+    if (this.trail) { this.group.remove(this.trail); this.disposeObject3D(this.trail); }
+    if (this.velArrow) { this.group.remove(this.velArrow); this.disposeObject3D(this.velArrow); }
+    if (this.accArrow) { this.group.remove(this.accArrow); this.disposeObject3D(this.accArrow); }
+    if (this.cometTail) { this.group.remove(this.cometTail); this.disposeObject3D(this.cometTail); }
     this.trailPoints = [];
 
     const radius = look.radius || (type === 'comet' ? .42 : .9);
