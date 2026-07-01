@@ -6,7 +6,7 @@ import { ModelLoader } from './systems/ModelLoader.js';
 import { Narrator } from './systems/Narrator.js?v=radio';
 import { ShipAudio } from './systems/ShipAudio.js?v=esc';
 import { Player } from './world/Player.js?v=turbo5';
-import { Cockpit } from './world/Cockpit.js?v=meteor1';
+import { Cockpit } from './world/Cockpit.js?v=glass6';
 import { SolarSystem } from './world/SolarSystem.js?v=flare1';
 import { FreeExploration } from './world/FreeExploration.js?v=exploration2';
 import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=twinkle1';
