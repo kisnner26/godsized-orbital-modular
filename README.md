@@ -6,7 +6,7 @@
 
 En vez de resolver el problema solo con lápiz y papel, este proyecto lo convierte en un vuelo espacial: pilotas la nave **Orion-07** en tercera/primera persona, te aproximas al sistema solar y activas un **modo de observación** que integra las ecuaciones del movimiento en tiempo real, cuadro a cuadro, mostrando cómo la gravedad del Sol curva la trayectoria de un planeta o cometa.
 
-![Boot screen](docs/screenshots/boot.jpg)
+![Vista desde la cabina de la Orion-07 acercándose al sistema solar](docs/screenshots/boot.jpg)
 
 ---
 
