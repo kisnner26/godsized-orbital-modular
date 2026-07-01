@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { Engine } from './core/Engine.js?v=world';
-import { Input } from './systems/Input.js?v=arrows';
-import { GamepadController } from './systems/Gamepad.js?v=esc2';
+import { Input } from './systems/Input.js?v=noMouse';
+import { GamepadController } from './systems/Gamepad.js?v=turbo';
 import { ModelLoader } from './systems/ModelLoader.js';
 import { Narrator } from './systems/Narrator.js?v=esc';
 import { ShipAudio } from './systems/ShipAudio.js?v=esc';
-import { Player } from './world/Player.js?v=flightfix3';
-import { Cockpit } from './world/Cockpit.js?v=thirdfix2';
+import { Player } from './world/Player.js?v=turbo';
+import { Cockpit } from './world/Cockpit.js?v=turbo';
 import { SolarSystem } from './world/SolarSystem.js?v=scenarios2';
 import { FreeExploration } from './world/FreeExploration.js?v=exploration2';
 import { buildSpaceEnvironment } from './world/SpaceEnvironment.js';
@@ -459,6 +459,7 @@ input.onKeyDown = (code) => {
   if (paused) return;
   if (code === 'KeyC' && gameplayMode === 'solar') panel.classList.toggle('hidden');
   if (code === 'KeyV') toggleFlightView();
+  if (code === 'KeyM') player.toggleTurbo();
   if (code === 'Equal' || code === 'NumpadAdd') setMaxSpeed(Number(maxSpeed.value) + 10);
   if (code === 'Minus' || code === 'NumpadSubtract') setMaxSpeed(Number(maxSpeed.value) - 10);
   const canSelect = !studyMenu.classList.contains('hidden') || player.mode === 'observe';
@@ -555,6 +556,7 @@ const gamepad = new GamepadController(input, {
   togglePause: () => toggleSettings(),
   togglePanel: () => { if (gameplayMode === 'solar') panel.classList.toggle('hidden'); },
   toggleView: () => toggleFlightView(),
+  toggleTurbo: () => player.toggleTurbo(),
   cycleBody: (d) => cycleBody(d),
   zoom: (f) => { if (player.mode === 'observe') player.zoomObservation(f); },
   exitObserve: () => { if (player.mode === 'observe') exitObserveMode(); },
@@ -573,13 +575,13 @@ const gamepad = new GamepadController(input, {
 const HINTS = {
   flight: [
     ['L-Stick / ←→↑↓', 'Girar'], ['R2 / ✕', 'Acelerar'], ['L2 / ◯', 'Frenar'],
-    ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Turbo'],
-    ['D-Pad ↑↓', 'Velocidad'], ['V / R3', '1ª / 3ª persona'], ['Options', 'Panel']
+    ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Impulso'],
+    ['M / R3', 'Turbo x3'], ['D-Pad ↑↓', 'Velocidad'], ['V', '1ª / 3ª persona'], ['Options', 'Panel']
   ],
   free: [
     ['L-Stick / ←→↑↓', 'Girar'], ['R2 / ✕', 'Acelerar'], ['L2 / ◯', 'Frenar'],
-    ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Turbo'],
-    ['V / R3', '1ª / 3ª persona']
+    ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Impulso'],
+    ['M / R3', 'Turbo x3'], ['V', '1ª / 3ª persona']
   ],
   observe: [
     ['D-Pad ◀ ▶', 'Cambiar cuerpo'], ['Rueda / L2 R2', 'Zoom'], ['◯', 'Salir'], ['C', 'Condiciones']

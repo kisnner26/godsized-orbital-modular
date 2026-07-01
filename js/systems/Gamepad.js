@@ -85,8 +85,9 @@ export class GamepadController {
       k.KeyD = this.pressed(gp, 5);                          // R1
       k.Space = this.pressed(gp, 3);                         // Triángulo (subir)
       k.ControlLeft = this.pressed(gp, 2);                   // Cuadrado (bajar)
-      k.ShiftLeft = this.pressed(gp, 10);                    // L3 (turbo)
+      k.ShiftLeft = this.pressed(gp, 10);                    // L3 (impulso)
 
+      if (this.edge(gp, 11)) this.actions.toggleTurbo?.();   // R3 (turbo x3)
       if (this.edge(gp, 12)) this.actions.speedUp?.();       // D-pad arriba
       if (this.edge(gp, 13)) this.actions.speedDown?.();     // D-pad abajo
       if (this.edge(gp, 9)) this.actions.togglePanel?.();    // Options

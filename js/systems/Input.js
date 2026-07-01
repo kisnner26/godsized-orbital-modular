@@ -1,7 +1,10 @@
 // Control de cámara SIN Pointer Lock API.
 // Así el navegador nunca muestra el aviso "tu puntero está oculto / pulsa Esc".
-// La nave se dirige con el movimiento relativo del ratón (movementX/Y) y el
-// cursor se oculta por CSS mientras se vuela.
+// La nave se dirige exclusivamente con las flechas del teclado (o el stick del
+// mando); el ratón/touchpad ya no mueve la cámara, porque sin Pointer Lock el
+// movementX/Y de un touchpad es errático (saltos y valores inconsistentes al
+// llegar al borde de la pantalla) y eso provocaba bugs de cámara en vuelo.
+// El cursor se sigue ocultando por CSS mientras se vuela.
 export class Input {
   constructor(canvas) {
     this.canvas = canvas;
@@ -10,7 +13,6 @@ export class Input {
     this.locked = false;     // compatibilidad con el resto del código
     this.yaw = 0;
     this.pitch = 0;
-    this.sensitivity = 0.0022;
     this.onKeyDown = null;
     this.onWheel = null;
 
@@ -24,13 +26,6 @@ export class Input {
       if (this.onKeyDown) this.onKeyDown(e.code);
     });
     document.addEventListener('keyup', e => { this.keys[e.code] = false; });
-
-    document.addEventListener('mousemove', e => {
-      if (!this.steering) return;
-      this.yaw -= (e.movementX || 0) * this.sensitivity;
-      this.pitch -= (e.movementY || 0) * this.sensitivity;
-      this.pitch = Math.max(-1.35, Math.min(1.35, this.pitch));
-    });
   }
 
   // Activa el control de vuelo (oculta el cursor vía clase de body).
