@@ -159,14 +159,77 @@ export class Cockpit {
     this._turboScratch = new THREE.Vector3();
   }
 
+  // El hueco del parabrisas en el modelo de la cabina está completamente
+  // vacío (sin geometría ni material ahí, se ve directo al vacío). Medido
+  // por raycasting contra el modelo: la abertura ocupa x∈[-0.57,0.56],
+  // y∈[0.05,0.42], con el borde del marco alrededor de z≈0.45-0.5 (espacio
+  // local del GLB, antes de aplicar la escala/posición de la cabina). Como
+  // este cristal se agrega como hijo del propio modelo, hereda su escala,
+  // posición y rotación automáticamente.
+  buildWindshieldGlass(cockpitRoot) {
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: 0xbfefff,
+      transparent: true,
+      opacity: 0.14,
+      roughness: 0.35,
+      metalness: 0.0,
+      emissive: 0x0a2a33,
+      emissiveIntensity: 0.15,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    // Posición/orientación medidas por raycasting desde el ojo real de la
+    // cámara (fpCam) contra la malla de la cabina, transformadas al espacio
+    // local de la cabina — así el cristal encaja en el hueco tal como se ve
+    // desde dentro, sea cual sea la escala/posición/rotación que se le
+    // aplique luego a la cabina completa.
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.68, 0.24, 8, 4), glassMat);
+    glass.position.set(0, 0.2535, -0.7615);
+    glass.rotation.x = -0.58;
+    glass.renderOrder = 2;
+    cockpitRoot.add(glass);
+
+    // Canto con resplandor tipo fresnel para que se note el borde del vidrio.
+    const rimMat = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: new THREE.Vector3(0.55, 0.9, 1.0) } },
+      vertexShader: `
+        varying vec3 vNormalW; varying vec3 vView;
+        void main() {
+          vNormalW = normalize(normalMatrix * normal);
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vView = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        uniform vec3 uColor;
+        varying vec3 vNormalW; varying vec3 vView;
+        void main() {
+          float fres = pow(1.0 - max(dot(normalize(vNormalW), vView), 0.0), 2.5);
+          gl_FragColor = vec4(uColor, fres * 0.55);
+        }`,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const rim = new THREE.Mesh(new THREE.PlaneGeometry(0.70, 0.26, 8, 4), rimMat);
+    rim.position.copy(glass.position);
+    rim.rotation.copy(glass.rotation);
+    rim.renderOrder = 1;
+    cockpitRoot.add(rim);
+    this.windshieldGlass = glass;
+  }
+
   async loadAll(shipRig, camera) {
-    // Cabina de pod para PRIMERA PERSONA (modelo nuevo): tablero abajo, dosel
-    // arriba y paneles laterales enmarcando la vista al frente.
+    // Cabina de pod para PRIMERA PERSONA: tablero abajo, dosel arriba y
+    // paneles laterales enmarcando la vista al frente. El parabrisas del
+    // modelo es un hueco abierto (sin cristal); se lo agregamos aparte.
     const cockpit = await this.loader.load('cabina de pod', './assets/models/cockpit_fp.glb');
     this.loader.normalize(cockpit, 7.5);
     cockpit.scale.setScalar(7.5);
     cockpit.position.set(0, -2.3, -0.5);
     cockpit.rotation.set(0.42, 0, 0);
+    this.buildWindshieldGlass(cockpit);
     shipRig.add(cockpit);
     this.cockpit = cockpit;
 
