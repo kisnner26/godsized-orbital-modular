@@ -3,7 +3,7 @@ import { Engine } from './core/Engine.js?v=world';
 import { Input } from './systems/Input.js?v=noMouse';
 import { GamepadController } from './systems/Gamepad.js?v=turbo';
 import { ModelLoader } from './systems/ModelLoader.js';
-import { Narrator } from './systems/Narrator.js?v=esc';
+import { Narrator } from './systems/Narrator.js?v=radio';
 import { ShipAudio } from './systems/ShipAudio.js?v=esc';
 import { Player } from './world/Player.js?v=turbo';
 import { Cockpit } from './world/Cockpit.js?v=turbo';
