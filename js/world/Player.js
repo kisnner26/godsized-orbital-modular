@@ -29,8 +29,8 @@ export class Player {
     this.boosting = false;
     this.thrustScale = 0.35;
     this.maxSpeed = 120;
-    this.turboActive = false;   // triplica la velocidad máxima (tecla M / R3)
-    this.turboMultiplier = 3;
+    this.turboActive = false;   // quintuplica la velocidad máxima (tecla M / R3)
+    this.turboMultiplier = 5;
     this.speedMetersPerSecond = 0;
     this.o2 = 0.89;
     this.mode = 'cinematic';
@@ -374,10 +374,10 @@ export class Player {
 
     const accel = new THREE.Vector3();
     const boost = this.input.keys.ShiftLeft || this.input.keys.ShiftRight;
-    // El turbo (tecla M / R3) triplica el empuje. Como la velocidad de
+    // El turbo (tecla M / R3) quintuplica el empuje. Como la velocidad de
     // crucero real es un equilibrio empuje/arrastre (no el tope `maxSpeed`,
-    // que casi nunca se alcanza en vuelo normal), triplicar el empuje es lo
-    // que de verdad triplica la velocidad de la nave en la práctica.
+    // que casi nunca se alcanza en vuelo normal), escalar el empuje es lo
+    // que de verdad multiplica la velocidad de la nave en la práctica.
     const scale = this.thrustScale * (this.turboActive ? this.turboMultiplier : 1);
     const mainThrust = (boost ? 16 : 8) * scale;
     const reverseThrust = (boost ? 10 : 5) * scale;
@@ -458,7 +458,7 @@ export class Player {
     this.maxSpeed = THREE.MathUtils.clamp(Number(maxSpeed) || 18, 3, 600);
   }
 
-  // Activa/desactiva el turbo (triplica el tope de velocidad). Solo tiene
+  // Activa/desactiva el turbo (quintuplica el tope de velocidad). Solo tiene
   // efecto pilotando la nave, nunca en observación ni en las cinemáticas.
   toggleTurbo() {
     if (this.mode !== 'flight') return;

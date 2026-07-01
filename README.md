@@ -169,7 +169,7 @@ Modo de vuelo libre sin las barreras del modo anterior: cinco sistemas planetari
 | `←` `→` `↑` `↓` | Girar la nave (cámara) |
 | `Space` / `Ctrl` | Subir / bajar |
 | `Shift` | Impulso (empuje extra) |
-| `M` | **Turbo** — triplica la velocidad máxima, con llamas azules y estela |
+| `M` | **Turbo** — quintuplica la velocidad máxima, con llamas azules y estela |
 | `V` | Alternar 1ª / 3ª persona |
 | `C` | Panel de condiciones iniciales (modo Sistema Solar) |
 | `1` / `2` | Observar planeta / cometa |
