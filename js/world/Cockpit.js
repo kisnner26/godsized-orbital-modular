@@ -139,6 +139,26 @@ export class Cockpit {
     this.thrusters = group;
   }
 
+  // Estela del turbo: una línea que va guardando las posiciones recientes de
+  // la nave en espacio de mundo (igual que el patrón de estela orbital de
+  // SolarSystem.js). Crece mientras el turbo está activo y se retrae solo
+  // cuando se apaga, en vez de desaparecer de golpe.
+  buildTurboTrail() {
+    this.turboTrailPoints = [];
+    this.turboTrailMax = 40;
+    this.turboTrail = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({
+        color: 0x4fc3ff, transparent: true, opacity: 0.65,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      })
+    );
+    this.turboTrail.frustumCulled = false;
+    this.turboTrail.visible = false;
+    this.scene.add(this.turboTrail);
+    this._turboScratch = new THREE.Vector3();
+  }
+
   async loadAll(shipRig, camera) {
     // Cabina de pod para PRIMERA PERSONA (modelo nuevo): tablero abajo, dosel
     // arriba y paneles laterales enmarcando la vista al frente.
@@ -197,6 +217,7 @@ export class Cockpit {
 
     this.buildThrusters(shipRig);
     this.buildInteriorLights(shipRig);
+    this.buildTurboTrail();
   }
 
   buildThirdPersonProxy(shipRig) {
@@ -312,23 +333,50 @@ export class Cockpit {
       this.shipProxy.rotation.z = Math.sin(t * 0.014) * shake * 0.8;
     }
 
-    // Llamas de los propulsores según el empuje
+    // Llamas de los propulsores según el empuje. Con el turbo activo (tecla M
+    // / R3) se tiñen de azul y se alargan, para que se note a simple vista.
+    const turbo = !!player?.turboActive;
     if (this.thrusters?.visible && this.flames.length) {
       const throttle = player?.throttle || 0;
       const ts = t * 0.001;
+      const lenBoost = turbo ? 1.8 : 1;
       for (let i = 0; i < this.flames.length; i++) {
         const { flame, outer, inner, glow } = this.flames[i];
         const flick = 0.78 + Math.sin(ts * 38 + i * 1.7) * 0.22;
-        const len = (0.12 + throttle * 1.25) * flick;
+        const len = (0.12 + throttle * 1.25) * flick * lenBoost;
         const wid = (0.5 + throttle * 0.7);
         flame.scale.set(wid, len, wid);
         const op = throttle > 0.02 ? 1 : 0.18;
+        outer.material.color.setHex(turbo ? 0x2f8fff : 0xff7a1e);
+        inner.material.color.setHex(turbo ? 0xe8f8ff : 0xbfe6ff);
+        glow.material.color.setHex(turbo ? 0x4fc3ff : 0xffae4d);
         outer.material.opacity = 0.6 * op;
         inner.material.opacity = 0.95 * op;
         glow.material.opacity = 0.55 * throttle * flick;
         glow.scale.setScalar(0.8 + throttle * 1.6 * flick);
       }
-      if (this.thrusterLight) this.thrusterLight.intensity = throttle * 3.2;
+      if (this.thrusterLight) {
+        this.thrusterLight.color.setHex(turbo ? 0x3fb8ff : 0xff7a2a);
+        this.thrusterLight.intensity = throttle * (turbo ? 4.6 : 3.2);
+      }
+    }
+
+    // Estela del turbo: crece en espacio de mundo mientras está activo y se
+    // retrae sola cuando se apaga.
+    if (this.turboTrail) {
+      if (turbo && player?.mode === 'flight') {
+        player.rig.getWorldPosition(this._turboScratch);
+        this.turboTrailPoints.push(this._turboScratch.clone());
+        if (this.turboTrailPoints.length > this.turboTrailMax) this.turboTrailPoints.shift();
+      } else if (this.turboTrailPoints.length) {
+        this.turboTrailPoints.shift();
+      }
+      if (this.turboTrailPoints.length > 1) {
+        this.turboTrail.geometry.setFromPoints(this.turboTrailPoints);
+        this.turboTrail.visible = true;
+      } else {
+        this.turboTrail.visible = false;
+      }
     }
   }
 }

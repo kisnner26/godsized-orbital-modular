@@ -29,6 +29,8 @@ export class Player {
     this.boosting = false;
     this.thrustScale = 0.35;
     this.maxSpeed = 120;
+    this.turboActive = false;   // triplica la velocidad máxima (tecla M / R3)
+    this.turboMultiplier = 3;
     this.speedMetersPerSecond = 0;
     this.o2 = 0.89;
     this.mode = 'cinematic';
@@ -172,6 +174,7 @@ export class Player {
     this.hazard = 'none';
     this.hazardLevel = 0;
     this.collapseTimer = 0;
+    this.turboActive = false;
 
     this.positionChaseCamera();
   }
@@ -282,6 +285,7 @@ export class Player {
     this.shipPitch = -0.08;
     this.shipRoll = 0;
     this.throttle = 0;
+    this.turboActive = false;
 
     this.rig.position.set(0, 1.2, 52);
     this.rig.rotation.set(0, 0, 0);
@@ -370,7 +374,11 @@ export class Player {
 
     const accel = new THREE.Vector3();
     const boost = this.input.keys.ShiftLeft || this.input.keys.ShiftRight;
-    const scale = this.thrustScale;
+    // El turbo (tecla M / R3) triplica el empuje. Como la velocidad de
+    // crucero real es un equilibrio empuje/arrastre (no el tope `maxSpeed`,
+    // que casi nunca se alcanza en vuelo normal), triplicar el empuje es lo
+    // que de verdad triplica la velocidad de la nave en la práctica.
+    const scale = this.thrustScale * (this.turboActive ? this.turboMultiplier : 1);
     const mainThrust = (boost ? 16 : 8) * scale;
     const reverseThrust = (boost ? 10 : 5) * scale;
     const sideThrust = (boost ? 9 : 4.5) * scale;
@@ -385,8 +393,9 @@ export class Player {
     if (this.input.keys.ControlLeft || this.input.keys.ControlRight) accel.y -= sideThrust;
 
     this.vel.addScaledVector(accel, dt);
+    const speedCap = this.turboActive ? this.maxSpeed * this.turboMultiplier : this.maxSpeed;
     const v = this.vel.length();
-    if (v > this.maxSpeed) this.vel.multiplyScalar(this.maxSpeed / v);
+    if (v > speedCap) this.vel.multiplyScalar(speedCap / v);
     this.vel.multiplyScalar(0.986);
     this.moveWithCollision(dt);
 
@@ -447,6 +456,13 @@ export class Player {
   setEngineTuning(thrustScale, maxSpeed) {
     this.thrustScale = THREE.MathUtils.clamp(Number(thrustScale) || 0.35, 0.10, 2.0);
     this.maxSpeed = THREE.MathUtils.clamp(Number(maxSpeed) || 18, 3, 600);
+  }
+
+  // Activa/desactiva el turbo (triplica el tope de velocidad). Solo tiene
+  // efecto pilotando la nave, nunca en observación ni en las cinemáticas.
+  toggleTurbo() {
+    if (this.mode !== 'flight') return;
+    this.turboActive = !this.turboActive;
   }
 
   setTerrainProvider(provider) {
@@ -589,6 +605,7 @@ export class Player {
     this.flightStatus = 'COLAPSO';
     this.statusEvent = reason;
     this.input.keys = {};
+    this.turboActive = false;
     // Frena de golpe el impulso que traía la nave: sin esto, un impacto a alta
     // velocidad dejaba el colapso con la inercia previa casi intacta y la nave
     // seguía "atravesando" el cuerpo (a cientos de u/s) durante toda la
