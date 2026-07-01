@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 
+const tmpHead = new THREE.Vector3();
+const tmpTail = new THREE.Vector3();
+
 export function buildSpaceEnvironment(scene) {
   const hemi = new THREE.HemisphereLight(0x9fbfff, 0x020305, 0.38);
   scene.add(hemi);
@@ -108,7 +111,127 @@ export function buildSpaceEnvironment(scene) {
   const constellations = makeConstellations();
   sky.add(constellations);
 
-  return { sky, stars, milky, constellations };
+  makeGalaxies(sky);
+  const shootingStars = makeShootingStars(sky);
+
+  return {
+    sky, stars, milky, constellations,
+    update(dt) { updateShootingStars(shootingStars, dt); }
+  };
+}
+
+// Galaxias lejanas: manchas con núcleo brillante + brazos espirales de puntos,
+// distintas de las nebulosas (más estructuradas, dan sensación de escala
+// verdaderamente cósmica más allá del propio sistema).
+function makeGalaxyTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 512;
+  const ctx = cv.getContext('2d');
+  const cx = 256, cy = 256;
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, 90);
+  core.addColorStop(0, 'rgba(255,250,230,.95)');
+  core.addColorStop(0.35, 'rgba(255,220,180,.5)');
+  core.addColorStop(1, 'rgba(255,220,180,0)');
+  ctx.fillStyle = core;
+  ctx.fillRect(0, 0, 512, 512);
+  for (let arm = 0; arm < 2; arm++) {
+    const offset = arm * Math.PI;
+    for (let i = 0; i < 480; i++) {
+      const t = i / 480;
+      const ang = t * Math.PI * 3.4 + offset;
+      const rad = 20 + t * 220;
+      const x = cx + Math.cos(ang) * rad + (Math.random() - 0.5) * 14;
+      const y = cy + Math.sin(ang) * rad * 0.5 + (Math.random() - 0.5) * 14;
+      const a = (1 - t) * 0.5 * Math.random();
+      ctx.fillStyle = `rgba(255,240,220,${a})`;
+      ctx.fillRect(x, y, 1.6, 1.6);
+    }
+  }
+  ctx.globalCompositeOperation = 'destination-in';
+  const vg = ctx.createRadialGradient(cx, cy, 40, cx, cy, 256);
+  vg.addColorStop(0, 'rgba(255,255,255,1)');
+  vg.addColorStop(0.75, 'rgba(255,255,255,.5)');
+  vg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, 512, 512);
+  ctx.globalCompositeOperation = 'source-over';
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function makeGalaxies(sky) {
+  const tex = makeGalaxyTexture();
+  const colors = [0xffe6c2, 0xbcd6ff, 0xffd0e8, 0xd8ffea];
+  for (let i = 0; i < 4; i++) {
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, color: colors[i], transparent: true, opacity: 0.4 + Math.random() * 0.22,
+      blending: THREE.AdditiveBlending, depthWrite: false, rotation: Math.random() * Math.PI * 2
+    }));
+    const r = 3450;
+    const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+    spr.position.set(r * Math.sin(ph) * Math.cos(th), r * Math.sin(ph) * Math.sin(th) * 0.5, r * Math.cos(ph));
+    const s = 480 + Math.random() * 380;
+    spr.scale.set(s, s, 1);
+    sky.add(spr);
+  }
+}
+
+// Estrellas fugaces: destellos breves y rápidos (a diferencia de los cometas,
+// lentos y en órbita) para que el cielo nunca se sienta del todo quieto. El
+// bloom del compositor ya existente hace que incluso una línea fina brille.
+function makeShootingStars(sky) {
+  const POOL = 5;
+  const stars = [];
+  for (let i = 0; i < POOL; i++) {
+    const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xdff2ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const line = new THREE.Line(geo, mat);
+    line.visible = false;
+    line.frustumCulled = false;
+    sky.add(line);
+    stars.push({ line, timer: Math.random() * 4, active: false, t: 0, start: new THREE.Vector3(), end: new THREE.Vector3() });
+  }
+  return stars;
+}
+
+function updateShootingStars(list, dt) {
+  for (const s of list) {
+    if (!s.active) {
+      s.timer -= dt;
+      if (s.timer > 0) continue;
+      const r = 2500;
+      const th = Math.random() * Math.PI * 2, ph = Math.acos(Math.random() * 1.1 - 0.55);
+      const travel = Math.random() * Math.PI * 2;
+      const len = 130 + Math.random() * 200;
+      s.start.set(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph), r * Math.sin(ph) * Math.sin(th));
+      s.end.copy(s.start).add(new THREE.Vector3(Math.cos(travel) * len, (Math.random() - 0.5) * len * 0.5, Math.sin(travel) * len));
+      s.active = true;
+      s.t = 0;
+      s.line.visible = true;
+      continue;
+    }
+    s.t += dt;
+    const dur = 0.5;
+    if (s.t >= dur) {
+      s.active = false;
+      s.line.visible = false;
+      s.timer = 2.5 + Math.random() * 8;
+      continue;
+    }
+    const k = s.t / dur;
+    const headT = Math.min(1, k * 1.5);
+    const tailT = Math.max(0, k * 1.5 - 0.4);
+    tmpHead.copy(s.start).lerp(s.end, headT);
+    tmpTail.copy(s.start).lerp(s.end, tailT);
+    const pos = s.line.geometry.attributes.position;
+    pos.setXYZ(0, tmpTail.x, tmpTail.y, tmpTail.z);
+    pos.setXYZ(1, tmpHead.x, tmpHead.y, tmpHead.z);
+    pos.needsUpdate = true;
+    s.line.material.opacity = Math.sin(Math.min(1, k * 3) * Math.PI * 0.5) * (1 - Math.max(0, k - 0.7) / 0.3);
+  }
 }
 
 // Constelaciones estilizadas (Orión, Osa Mayor, Casiopea, Cisne) dibujadas

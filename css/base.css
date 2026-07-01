@@ -91,30 +91,39 @@ body.is-observation .controls-hint{top:auto;bottom:150px}
 .bs__options button:hover{color:#eafffb;border-color:rgba(120,255,230,.4)}
 .bs__options button.active{color:#04141a;background:rgba(120,255,230,.85);border-color:rgba(120,255,230,.85);font-weight:600}
 
-/* ---------- Menú de ajustes (ESC) ---------- */
-.settings{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at center,rgba(6,18,28,.66),rgba(0,0,0,.82));backdrop-filter:blur(10px)}
-.settings__panel{width:min(440px,calc(100vw - 40px));max-height:calc(100vh - 60px);overflow-y:auto;padding:22px 24px;background:linear-gradient(160deg,rgba(6,18,28,.96),rgba(0,4,8,.9));border:1px solid rgba(120,255,230,.28);border-radius:14px;box-shadow:0 30px 110px rgba(0,0,0,.7),0 0 70px rgba(90,255,230,.07);animation:settingsIn .22s ease}
-@keyframes settingsIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
-.settings__head{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid rgba(120,255,230,.16);padding-bottom:14px;margin-bottom:6px}
-.settings__eyebrow{font-size:9px;letter-spacing:.26em;color:#72ffe4}
-.settings__head h2{margin:0;font-size:22px;font-weight:300;letter-spacing:.14em;color:#f2ffff;flex:1}
-.settings__close{width:34px;height:34px;border:1px solid rgba(120,255,230,.32);background:rgba(20,80,95,.3);color:#eaffff;font-size:18px;line-height:1;cursor:pointer;border-radius:8px;transition:background .15s}
-.settings__close:hover{background:rgba(45,130,140,.5)}
-.settings__section{padding:16px 0;border-bottom:1px solid rgba(120,255,230,.1)}
-.settings__section:last-of-type{border-bottom:none}
-.settings__title{display:block;font-size:9.5px;letter-spacing:.24em;color:rgba(100,255,225,.6);margin-bottom:12px}
-.settings__modes{display:flex;gap:8px;flex-wrap:wrap}
-.settings__modes button{flex:1;min-width:90px;padding:11px 10px;font-size:12px;letter-spacing:.04em;color:rgba(220,255,255,.72);background:rgba(0,18,26,.5);border:1px solid rgba(100,255,225,.18);border-radius:8px;cursor:pointer;transition:all .15s}
-.settings__modes button:hover{color:#eafffb;border-color:rgba(120,255,230,.45)}
-.settings__modes button.active{color:#04141a;background:rgba(120,255,230,.85);border-color:rgba(120,255,230,.85);font-weight:600}
-.settings__hint{display:block;margin-top:10px;font-size:11px;color:rgba(220,255,255,.5);letter-spacing:.04em}
-.settings__row{display:flex;align-items:center;gap:12px;font-size:12px;color:rgba(220,255,255,.74);margin-top:6px}
+/* ---------- Menú de ajustes (ESC): pantalla completa, estilo juego ---------- */
+.settings{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;padding:28px;background:radial-gradient(circle at center,rgba(6,18,28,.86),rgba(0,0,0,.96));backdrop-filter:blur(16px)}
+.settings__panel{position:relative;width:min(1320px,100%);height:min(840px,100%);padding:48px 60px 34px;background:linear-gradient(165deg,rgba(6,20,30,.95),rgba(0,3,6,.98));border:1px solid rgba(120,255,230,.22);box-shadow:0 50px 180px rgba(0,0,0,.8),0 0 140px rgba(90,255,230,.07);animation:settingsIn .26s cubic-bezier(.2,.8,.3,1);display:flex;flex-direction:column;overflow-y:auto}
+@keyframes settingsIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+.settings__corner{position:absolute;width:38px;height:38px;border-color:rgba(120,255,230,.55);pointer-events:none}
+.settings__corner--tl{top:14px;left:14px;border-top:2px solid;border-left:2px solid}
+.settings__corner--tr{top:14px;right:14px;border-top:2px solid;border-right:2px solid}
+.settings__corner--bl{bottom:14px;left:14px;border-bottom:2px solid;border-left:2px solid}
+.settings__corner--br{bottom:14px;right:14px;border-bottom:2px solid;border-right:2px solid}
+.settings__head{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid rgba(120,255,230,.18);padding-bottom:26px;margin-bottom:32px}
+.settings__eyebrow{display:block;font-size:11px;letter-spacing:.34em;color:#72ffe4}
+.settings__head h2{margin:10px 0 0;font-size:clamp(30px,4vw,50px);font-weight:200;letter-spacing:.18em;color:#f2ffff;text-shadow:0 0 44px rgba(90,255,230,.28)}
+.settings__close{flex:none;width:48px;height:48px;border:1px solid rgba(120,255,230,.34);background:rgba(20,80,95,.32);color:#eaffff;font-size:22px;line-height:1;cursor:pointer;border-radius:10px;transition:background .15s,transform .25s}
+.settings__close:hover{background:rgba(45,130,140,.55);transform:rotate(90deg)}
+.settings__grid{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:26px;align-content:start}
+.settings__section{padding:28px 24px;background:linear-gradient(160deg,rgba(0,16,22,.5),rgba(0,4,6,.3));border:1px solid rgba(120,255,230,.16);border-radius:12px}
+.settings__title{display:block;font-size:11px;letter-spacing:.3em;color:rgba(120,255,230,.78);margin-bottom:20px}
+.settings__modes{display:flex;gap:9px;flex-wrap:wrap}
+.settings__modes button{flex:1;min-width:100px;padding:15px 12px;font-size:13px;letter-spacing:.05em;color:rgba(220,255,255,.72);background:rgba(0,18,26,.5);border:1px solid rgba(100,255,225,.2);border-radius:9px;cursor:pointer;transition:all .15s}
+.settings__modes button:hover{color:#eafffb;border-color:rgba(120,255,230,.5);transform:translateY(-1px)}
+.settings__modes button.active{color:#04141a;background:rgba(120,255,230,.88);border-color:rgba(120,255,230,.88);font-weight:600;box-shadow:0 0 26px rgba(120,255,230,.35)}
+.settings__hint{display:block;margin-top:16px;font-size:12px;color:rgba(220,255,255,.5);letter-spacing:.04em;line-height:1.5}
+.settings__row{display:flex;align-items:center;gap:14px;font-size:13px;color:rgba(220,255,255,.76);margin-top:18px}
 .settings__row input[type=range]{flex:1;accent-color:#72ffe4;cursor:pointer}
 .settings__row strong{min-width:42px;text-align:right;color:#eafffb}
-.settings__check{display:flex;align-items:center;gap:9px;margin-top:14px;font-size:12px;color:rgba(220,255,255,.74);cursor:pointer}
-.settings__check input{accent-color:#72ffe4;width:16px;height:16px;cursor:pointer}
-.settings__foot{margin-top:16px;font-size:11px;color:rgba(220,255,255,.45);text-align:center}
-.settings__foot kbd{padding:2px 7px;border:1px solid rgba(120,255,230,.3);border-radius:4px;font-family:inherit;color:#9affde}
+.settings__check{display:flex;align-items:center;gap:10px;margin-top:20px;font-size:13px;color:rgba(220,255,255,.76);cursor:pointer}
+.settings__check input{accent-color:#72ffe4;width:17px;height:17px;cursor:pointer}
+.settings__foot{margin-top:28px;padding-top:20px;border-top:1px solid rgba(120,255,230,.14);font-size:12px;color:rgba(220,255,255,.48);text-align:center}
+.settings__foot kbd{padding:3px 8px;border:1px solid rgba(120,255,230,.3);border-radius:4px;font-family:inherit;color:#9affde}
+@media (max-width:900px),(max-height:700px){
+  .settings__grid{grid-template-columns:1fr}
+  .settings__panel{padding:32px 24px 24px}
+}
 
 /* ---------- Fundido cinematográfico ---------- */
 .fade{position:fixed;inset:0;z-index:64;background:#000;opacity:0;pointer-events:none;transition:opacity .7s ease}
@@ -136,8 +145,13 @@ body.is-hud-collapsed .physics,body.is-hud-collapsed .body-switcher,body.is-hud-
 /* ---------- Colapsar el Sol (experimento mental) ---------- */
 .collapse-sun,.restore-sun{position:fixed;z-index:70;right:28px;font-size:11px;letter-spacing:.16em;padding:13px 18px;border:1px solid rgba(255,170,140,.36);background:rgba(70,15,18,.62);color:#eaffff;cursor:pointer;box-shadow:0 0 32px rgba(70,255,230,.1);transition:transform .18s,background .18s}
 .collapse-sun:hover,.restore-sun:hover{transform:translateY(-1px);background:rgba(110,30,20,.7)}
-.collapse-sun{bottom:80px}
-.restore-sun{bottom:28px;border-color:rgba(255,210,120,.42);background:rgba(60,42,10,.66)}
+/* En observación, apilado con holgura por encima de "salir de observación"
+   (que ocupa bottom:28..~73px) en vez de los ~7px de antes. */
+.collapse-sun{bottom:104px}
+/* En vuelo normal comparte esquina con el hud-toggle/velocidad de sistema
+   (arriba a la derecha): nunca se muestran a la vez, así que no chocan entre
+   sí, y arriba queda libre de la barra HUD inferior y el velocímetro. */
+.restore-sun{top:26px;bottom:auto;border-color:rgba(255,210,120,.42);background:rgba(60,42,10,.66)}
 .restore-sun:hover{background:rgba(96,68,15,.72)}
 
 /* ---------- Velocidad del sistema (observación) ---------- */

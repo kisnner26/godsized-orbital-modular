@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GOD-SIZED UNIVERSE — Orion Flight</title>
-  <link rel="stylesheet" href="./css/base.css?v=lesson2" />
-  <link rel="stylesheet" href="./css/hud.css?v=speedo" />
+  <link rel="stylesheet" href="./css/base.css?v=settings2" />
+  <link rel="stylesheet" href="./css/hud.css?v=lightspeed1" />
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -95,45 +95,63 @@
     <div id="speedoTurbo" class="speedo__turbo hidden">TURBO</div>
   </div>
 
+  <!-- Telemetría de dilatación temporal al volar a velocidad luz (solo Exploración) -->
+  <div id="lightspeedHud" class="lightspeed hidden">
+    <span class="lightspeed__label">VELOCIDAD LUZ <strong id="lsState">ACTIVA</strong></span>
+    <div class="lightspeed__row"><span>v / c</span><strong id="lsBeta">0.000</strong></div>
+    <div class="lightspeed__row"><span>FACTOR γ (LORENTZ)</span><strong id="lsGamma">1.000</strong></div>
+    <div class="lightspeed__row"><span>TIEMPO NAVE</span><strong id="lsProper">00:00.0</strong></div>
+    <div class="lightspeed__row"><span>TIEMPO UNIVERSO</span><strong id="lsCoord">00:00.0</strong></div>
+  </div>
+
   <!-- Menú de ajustes (se abre con ESC). Pausa la simulación. -->
   <section id="settingsMenu" class="settings hidden" aria-label="Ajustes">
     <div class="settings__panel" role="dialog" aria-modal="true">
+      <div class="settings__corner settings__corner--tl"></div>
+      <div class="settings__corner settings__corner--tr"></div>
+      <div class="settings__corner settings__corner--bl"></div>
+      <div class="settings__corner settings__corner--br"></div>
+
       <header class="settings__head">
-        <span class="settings__eyebrow">ORION-07</span>
-        <h2>AJUSTES</h2>
+        <div>
+          <span class="settings__eyebrow">ORION-07 · CONTROL DE MISIÓN</span>
+          <h2>AJUSTES</h2>
+        </div>
         <button id="settingsClose" class="settings__close" title="Cerrar (ESC)">×</button>
       </header>
 
-      <div class="settings__section">
-        <span class="settings__title">MODO DE JUEGO</span>
-        <div class="settings__modes" role="group" aria-label="Seleccionar modo de juego">
-          <button id="modeSolar" type="button" class="active" aria-pressed="true">Sistema solar</button>
-          <button id="modeFree" type="button" aria-pressed="false">Exploración</button>
+      <div class="settings__grid">
+        <div class="settings__section">
+          <span class="settings__title">MODO DE JUEGO</span>
+          <div class="settings__modes" role="group" aria-label="Seleccionar modo de juego">
+            <button id="modeSolar" type="button" class="active" aria-pressed="true">Sistema solar</button>
+            <button id="modeFree" type="button" aria-pressed="false">Exploración</button>
+          </div>
+          <strong id="modeStatus" class="settings__hint">Órbitas y observación</strong>
         </div>
-        <strong id="modeStatus" class="settings__hint">Órbitas y observación</strong>
-      </div>
 
-      <div class="settings__section">
-        <span class="settings__title">SONIDO</span>
-        <label class="settings__row">Volumen de motores
-          <input id="setVolume" type="range" min="0" max="100" value="34">
-          <strong id="setVolumeVal">34</strong>
-        </label>
-        <label class="settings__check"><input id="setVoice" type="checkbox" checked> Narración por voz</label>
-      </div>
-
-      <div class="settings__section">
-        <span class="settings__title">GRÁFICOS</span>
-        <div class="settings__modes" role="group" aria-label="Calidad gráfica">
-          <button id="gfxLow" type="button">Rendimiento</button>
-          <button id="gfxMed" type="button" class="active">Equilibrado</button>
-          <button id="gfxHigh" type="button">Alta</button>
-          <button id="gfxUltra" type="button">Ultra</button>
+        <div class="settings__section">
+          <span class="settings__title">SONIDO</span>
+          <label class="settings__row">Volumen de motores
+            <input id="setVolume" type="range" min="0" max="100" value="34">
+            <strong id="setVolumeVal">34</strong>
+          </label>
+          <label class="settings__check"><input id="setVoice" type="checkbox" checked> Narración por voz</label>
         </div>
-        <label class="settings__row">Intensidad de brillo
-          <input id="setBloom" type="range" min="0" max="120" value="62">
-          <strong id="setBloomVal">0.62</strong>
-        </label>
+
+        <div class="settings__section">
+          <span class="settings__title">GRÁFICOS</span>
+          <div class="settings__modes" role="group" aria-label="Calidad gráfica">
+            <button id="gfxLow" type="button">Rendimiento</button>
+            <button id="gfxMed" type="button" class="active">Equilibrado</button>
+            <button id="gfxHigh" type="button">Alta</button>
+            <button id="gfxUltra" type="button">Ultra</button>
+          </div>
+          <label class="settings__row">Intensidad de brillo
+            <input id="setBloom" type="range" min="0" max="120" value="62">
+            <strong id="setBloomVal">0.62</strong>
+          </label>
+        </div>
       </div>
 
       <footer class="settings__foot">Pulsa <kbd>P</kbd> (o <kbd>Select</kbd> en el mando) para abrir o cerrar este menú.</footer>
@@ -321,6 +339,6 @@
     }
   }
   </script>
-  <script type="module" src="./js/main.js?v=sunlife2"></script>
+  <script type="module" src="./js/main.js?v=v2final"></script>
 </body>
 </html>
