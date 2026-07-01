@@ -5,9 +5,9 @@ import { GamepadController } from './systems/Gamepad.js?v=esc2';
 import { ModelLoader } from './systems/ModelLoader.js';
 import { Narrator } from './systems/Narrator.js?v=esc';
 import { ShipAudio } from './systems/ShipAudio.js?v=esc';
-import { Player } from './world/Player.js?v=flightfix2';
-import { Cockpit } from './world/Cockpit.js?v=thirdfix';
-import { SolarSystem } from './world/SolarSystem.js?v=scenarios';
+import { Player } from './world/Player.js?v=flightfix3';
+import { Cockpit } from './world/Cockpit.js?v=thirdfix2';
+import { SolarSystem } from './world/SolarSystem.js?v=scenarios2';
 import { FreeExploration } from './world/FreeExploration.js?v=exploration2';
 import { buildSpaceEnvironment } from './world/SpaceEnvironment.js';
 import { HUD } from './ui/HUD.js';
@@ -412,9 +412,10 @@ setBloom.addEventListener('input', () => {
   engine.bloom.strength = s;
 });
 const GFX = {
-  gfxLow:  { pr: 1.0, bloom: 0.35, shadows: false, maxLevel: 3 },
-  gfxMed:  { pr: 1.5, bloom: 0.62, shadows: true,  maxLevel: 4 },
-  gfxHigh: { pr: 2.0, bloom: 0.85, shadows: true,  maxLevel: 5 }
+  gfxLow:   { pr: 1.0, bloom: 0.35, shadows: false, maxLevel: 3 },
+  gfxMed:   { pr: 1.5, bloom: 0.62, shadows: true,  maxLevel: 4 },
+  gfxHigh:  { pr: 2.0, bloom: 0.85, shadows: true,  maxLevel: 5 },
+  gfxUltra: { pr: 2.5, bloom: 1.0,  shadows: true,  maxLevel: 6 }
 };
 function applyGraphics(preset) {
   const cfg = GFX[preset]; if (!cfg) return;
