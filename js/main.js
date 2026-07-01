@@ -5,10 +5,11 @@ import { GamepadController } from './systems/Gamepad.js?v=turbo';
 import { ModelLoader } from './systems/ModelLoader.js';
 import { Narrator } from './systems/Narrator.js?v=queue1';
 import { ShipAudio } from './systems/ShipAudio.js?v=esc';
-import { Player } from './world/Player.js?v=lightspeed2';
-import { Cockpit } from './world/Cockpit.js?v=onfoot1';
+import { Radio } from './systems/Radio.js?v=1';
+import { Player } from './world/Player.js?v=autoland1';
+import { Cockpit } from './world/Cockpit.js?v=astronaut1';
 import { SolarSystem } from './world/SolarSystem.js?v=moonfix3';
-import { FreeExploration } from './world/FreeExploration.js?v=lightspeed1';
+import { FreeExploration } from './world/FreeExploration.js?v=scale1';
 import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=galaxies1';
 import { HUD } from './ui/HUD.js?v=lightspeed1';
 import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=facts2';
@@ -31,6 +32,11 @@ const speedControl = document.getElementById('speedControl');
 const speedSlider = document.getElementById('speedSlider');
 const speedValue = document.getElementById('speedValue');
 const speedo = document.getElementById('speedo');
+const shipRadio = document.getElementById('shipRadio');
+const radioToggle = document.getElementById('radioToggle');
+const radioNext = document.getElementById('radioNext');
+const radioStation = document.getElementById('radioStation');
+const radioVolume = document.getElementById('radioVolume');
 const bodySwitcher = document.getElementById('bodySwitcher');
 const bodyName = document.getElementById('bodyName');
 const bodyOptions = document.getElementById('bodyOptions');
@@ -57,6 +63,7 @@ const solar = new SolarSystem(engine.scene);
 const freeExploration = new FreeExploration(engine.scene, engine.camera);
 const narrator = new Narrator();
 const shipAudio = new ShipAudio(input, player);
+const radio = new Radio();
 const physics = new PhysicsOverlay(solar);
 const lesson = new GuidedLesson({
   player, solar, narrator,
@@ -147,6 +154,7 @@ function startFreeSimulation() {
   helmetEl.classList.add('hidden');
   speedControl.classList.remove('hidden');
   speedo.classList.remove('hidden');
+  shipRadio?.classList.remove('hidden');
   controlsHint.classList.remove('hidden');
   setSpeedLimitForMode('free', MODE_SPEED_LIMITS.free);
   if (missionTitle) missionTitle.textContent = 'ORION-07 / EXPLORACION';
@@ -165,6 +173,7 @@ function enterFlight() {
   helmetEl.classList.add('hidden');
   speedControl.classList.remove('hidden');
   speedo.classList.remove('hidden');
+  shipRadio?.classList.remove('hidden');
   cinematic.classList.add('hidden');
   if (missionTitle) missionTitle.textContent = 'ORION-07 / VUELO';
 
@@ -204,6 +213,7 @@ function beginApproachIfClose() {
     panel.classList.add('hidden');
     speedControl.classList.add('hidden');
     speedo.classList.add('hidden');
+    shipRadio?.classList.add('hidden');
     controlsHint.classList.add('hidden');
     cockpit.startObservation();               // ocultar la nave durante la cinemática
     player.beginSolarApproach(center);
@@ -289,6 +299,7 @@ function enterObservation(index) {
   panel.classList.add('hidden');
   speedControl.classList.add('hidden');
   speedo.classList.add('hidden');
+  shipRadio?.classList.add('hidden');
   bodySwitcher.classList.remove('hidden');
   systemSpeed.classList.remove('hidden');
   hudToggle?.classList.remove('hidden');
@@ -351,6 +362,7 @@ function exitObserveMode() {
   document.body.classList.remove('is-observation');
   speedControl.classList.remove('hidden');
   speedo.classList.remove('hidden');
+  shipRadio?.classList.remove('hidden');
   input.lock();
 
   // Reiniciamos el flujo: la nave vuelve al punto de partida y se puede
@@ -440,6 +452,7 @@ function setGameplayMode(mode) {
       hudEl.classList.remove('hidden');
       speedControl.classList.remove('hidden');
       speedo.classList.remove('hidden');
+      shipRadio?.classList.remove('hidden');
       controlsHint.classList.remove('hidden');
       bodySwitcher.classList.add('hidden');
       systemSpeed.classList.add('hidden');
@@ -486,6 +499,17 @@ setVolume.addEventListener('input', () => {
   setVolumeVal.textContent = setVolume.value;
   shipAudio.setMasterVolume(Number(setVolume.value) / 100);
 });
+// Radio de a bordo: rock de los 90 (emisoras reales via radio-browser.info)
+radio.onStationChange = label => { if (radioStation) radioStation.textContent = label; };
+radio.onPlayStateChange = playing => {
+  if (radioToggle) radioToggle.textContent = playing ? '❚❚' : '▶';
+  shipRadio?.classList.toggle('is-playing', playing);
+};
+radioToggle?.addEventListener('click', () => radio.toggle());
+radioNext?.addEventListener('click', () => radio.next());
+radioVolume?.addEventListener('input', () => radio.setVolume(Number(radioVolume.value) / 100));
+radio.setVolume(Number(radioVolume?.value ?? 45) / 100);
+
 document.getElementById('setVoice').addEventListener('change', e => {
   narrator.enabled = e.target.checked;
   if (!narrator.enabled && 'speechSynthesis' in window) window.speechSynthesis.cancel();
@@ -530,33 +554,48 @@ function setFlightView(first) {
 }
 function toggleFlightView() {
   if (player.mode === 'flight') setFlightView(!player.firstPerson);
-}
-
-// Aterrizar / volver a bordo (tecla F), solo tiene efecto en Exploración:
-// aterrizando sobre suelo rocoso ya casi detenida, o a pie cerca de donde
-// quedó la nave.
-function tryInteract() {
-  if (player.canLand()) {
-    player.land();
-    cockpit.showLandedMarker(player.parkedShip.position, player.parkedShip.quaternion);
-    cockpit.startOnFoot();
-    input.lock();
-    speedo.classList.add('hidden');
-    speedControl.classList.add('hidden');
-    if (missionTitle) missionTitle.textContent = 'A PIE / EXPLORACIÓN SUPERFICIE';
+  else if (player.mode === 'onfoot') {
+    player.firstPerson = !player.firstPerson;
+    cockpit.applyFootView(player.firstPerson);
     updateControlsHint();
-    narrator.say('Aterrizaje completado. Traje presurizado: puedes salir a explorar la superficie a pie.', 6500);
-  } else if (player.canBoard()) {
-    cockpit.hideLandedMarker();
-    player.board();
-    cockpit.startFlight();
-    speedo.classList.remove('hidden');
-    speedControl.classList.remove('hidden');
-    if (missionTitle) missionTitle.textContent = 'ORION-07 / EXPLORACION';
-    updateControlsHint();
-    narrator.say('De vuelta a bordo. Motores listos para despegar.', 4200);
   }
 }
+
+// La entrada a la superficie ahora es automática (ver player.checkAutoLand /
+// player.onLand más abajo). Solo volver a abordar la nave sigue siendo una
+// acción deliberada (tecla F, cerca de donde quedó aparcada).
+function tryInteract() {
+  if (player.canBoard()) {
+    cockpit.hideLandedMarker();
+    player.board();
+  }
+}
+
+player.onLand = () => {
+  cockpit.showLandedMarker(player.parkedShip.position, player.parkedShip.quaternion);
+  cockpit.startOnFoot();
+  player.firstPerson = false;   // se entra a la superficie en tercera persona
+  cockpit.applyFootView(false);
+  freeExploration.enterSurfaceMode(player.activeAutoLandBody);
+  input.lock();
+  speedo.classList.add('hidden');
+  speedControl.classList.add('hidden');
+  shipRadio?.classList.add('hidden');
+  if (missionTitle) missionTitle.textContent = 'A PIE / EXPLORACIÓN SUPERFICIE';
+  updateControlsHint();
+  narrator.say('Entrada a la superficie completada. Traje presurizado: puedes explorar a pie.', 6500);
+};
+
+player.onBoard = () => {
+  cockpit.startFlight();
+  freeExploration.exitSurfaceMode();
+  speedo.classList.remove('hidden');
+  speedControl.classList.remove('hidden');
+  shipRadio?.classList.remove('hidden');
+  if (missionTitle) missionTitle.textContent = 'ORION-07 / EXPLORACION';
+  updateControlsHint();
+  narrator.say('De vuelta a bordo. Motores listos para despegar.', 4200);
+};
 
 // Rueda del ratón: zoom en observación.
 input.onWheel = (deltaY) => {
@@ -704,8 +743,7 @@ const HINTS = {
   free: [
     ['L-Stick / ←→↑↓', 'Girar'], ['R2 / ✕', 'Acelerar'], ['L2 / ◯', 'Frenar'],
     ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Impulso'],
-    ['M / R3', 'Turbo x5'], ['V', '1ª / 3ª persona'], ['F', 'Aterrizar (sobre suelo rocoso)'],
-    ['L', 'Velocidad luz']
+    ['M / R3', 'Turbo x5'], ['V', '1ª / 3ª persona'], ['L', 'Velocidad luz']
   ],
   onfoot: [
     ['W A S D', 'Caminar'], ['←→↑↓', 'Girar / Mirar'], ['Shift', 'Correr'],
@@ -757,10 +795,7 @@ engine.addUpdater(dt => {
   const targetWarp = gameplayMode === 'free' ? player.lightSpeedBeta : 0;
   const warpUniform = engine.warpPass.uniforms.uWarp;
   warpUniform.value += (targetWarp - warpUniform.value) * Math.min(1, dt * 3);
-  if (gameplayMode === 'free' && player.canLand()) {
-    interactPrompt.innerHTML = 'Presiona <b>F</b> para aterrizar';
-    interactPrompt.classList.remove('hidden');
-  } else if (gameplayMode === 'free' && player.canBoard()) {
+  if (gameplayMode === 'free' && player.canBoard()) {
     interactPrompt.innerHTML = 'Presiona <b>F</b> para volver a la nave';
     interactPrompt.classList.remove('hidden');
   } else {

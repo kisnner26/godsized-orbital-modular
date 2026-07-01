@@ -47,3 +47,17 @@ body.is-free-mode .speedo{bottom:180px}
 .lightspeed__label strong{font-size:9px;letter-spacing:.15em;color:#bfe0ff;text-shadow:0 0 10px rgba(120,190,255,.6)}
 .lightspeed__row{display:flex;justify-content:space-between;gap:14px;font-size:11px;color:rgba(220,240,255,.7);margin-top:5px}
 .lightspeed__row strong{color:#eaf6ff;letter-spacing:.03em;text-shadow:0 0 10px rgba(120,190,255,.4)}
+
+/* Radio de a bordo */
+.radio{position:fixed;z-index:32;top:26px;left:34px;padding:10px 14px;width:230px;background:linear-gradient(135deg,rgba(0,20,28,.72),rgba(0,0,0,.42));border:1px solid rgba(120,255,230,.26);box-shadow:0 12px 44px rgba(0,0,0,.45);backdrop-filter:blur(12px);pointer-events:auto}
+body.is-free-mode .radio{top:135px}
+.radio__row{display:flex;align-items:center;gap:10px}
+.radio__play,.radio__next{flex:none;width:30px;height:30px;border:1px solid rgba(120,255,230,.35);background:rgba(20,80,95,.35);color:#eaffff;font-size:12px;line-height:1;cursor:pointer;border-radius:6px;transition:background .15s}
+.radio__play:hover,.radio__next:hover{background:rgba(45,130,140,.55)}
+.radio__info{flex:1;min-width:0}
+.radio__eyebrow{display:flex;align-items:center;gap:6px;font-size:8.5px;letter-spacing:.2em;color:rgba(120,255,230,.6)}
+.radio__dot{width:6px;height:6px;border-radius:50%;background:rgba(120,255,230,.25)}
+.radio.is-playing .radio__dot{background:#72ffe4;box-shadow:0 0 8px #72ffe4;animation:radioPulse 1.4s infinite}
+@keyframes radioPulse{0%,100%{opacity:.6}50%{opacity:1}}
+.radio__info strong{display:block;font-size:11px;color:#eaffff;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.radio input[type=range]{width:100%;margin-top:8px;accent-color:#72ffe4;cursor:pointer}
