@@ -45,12 +45,17 @@ export class Engine {
     this.canvas = canvas;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x01040a);
-    this.camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.02, 8000);
+    // Escala moderada (estilo del video de referencia): los planetas se ven
+    // como esferas al acercarse, no llenan la pantalla. Con far 12000 el
+    // z-buffer lineal basta y sobra — sin coste de z-buffer logarítmico.
+    this.camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 12000);
     this.camera.position.set(0, 1.55, 1.2);
 
     // antialias solo puede decidirse al crear el contexto: el preset
     // "Rendimiento" guardado lo desactiva en la siguiente carga (main.js lee
     // localStorage antes de construir el motor).
+    // (Los shaders custom conservan los chunks <logdepthbuf_*>; sin
+    // logarithmicDepthBuffer, USE_LOGDEPTHBUF no se define y expanden a nada.)
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: opts.antialias !== false,

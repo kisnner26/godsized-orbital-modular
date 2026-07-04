@@ -55,6 +55,13 @@ export class Player {
     this.groundClearance = 1.8;
     this.floatingOriginOffset = new THREE.Vector3();
     this.floatingOriginThreshold = 50000;
+    this.altitudeUnits = 0;
+    this.hazardKind = '';
+    this.groundNormal = new THREE.Vector3(0, 1, 0);   // normal del terreno bajo la nave
+    this.entryHeat = 0;      // 0..1 fricción de entrada atmosférica (efecto visual)
+    this.exosuit = null;     // lo inyecta main.js; da combustible a la mochila propulsora
+    this.jetpacking = false;
+    this._spaceWasHeld = false;
 
     this.shipYaw = 0;
     this.shipPitch = 0;
@@ -188,6 +195,7 @@ export class Player {
 
   startSimulation() {
     this.mode = 'flight';
+    this.camera.up.set(0, 1, 0);
     this.timer = 0;
     this.input.yaw = 0;
     this.input.pitch = -0.08;
@@ -391,18 +399,39 @@ export class Player {
     this.shipYaw = this.input.yaw;
     this.shipPitch = THREE.MathUtils.clamp(this.input.pitch, -0.82, 0.82);
 
-    this.shipRoll = THREE.MathUtils.lerp(
-      this.shipRoll,
-      (this.input.keys.KeyA ? 0.22 : 0) + (this.input.keys.KeyD ? -0.22 : 0),
-      0.07
-    );
+    // Auto-nivelado atmosférico (estilo NMS): dentro de la atmósfera de un
+    // planeta rocoso la nave rueda suavemente hasta alinear su "arriba" con
+    // la normal del terreno, y la cámara nivela el horizonte contra el
+    // planeta en vez de contra el eje Y del mundo. Sin esto la entrada se
+    // sentía "torcida": el horizonte quedaba en diagonal según el punto de
+    // la esfera por el que se entrara.
+    const manualRoll = (this.input.keys.KeyA ? 0.22 : 0) + (this.input.keys.KeyD ? -0.22 : 0);
+    const atmosphericFlight = this.insideAtmosphere && this.hazard === 'solid';
+    if (atmosphericFlight) {
+      euler.set(this.shipPitch, this.shipYaw, 0, 'YXZ');
+      forward.set(0, 0, -1).applyEuler(euler);
+      tmp.set(0, 1, 0).applyEuler(euler);                       // "arriba" de la nave con roll 0
+      tmp2.copy(this.groundNormal).addScaledVector(forward, -this.groundNormal.dot(forward));
+      if (tmp2.lengthSq() > 1e-4) {
+        tmp2.normalize();                                        // normal proyectada al plano del morro
+        const cosA = THREE.MathUtils.clamp(tmp.dot(tmp2), -1, 1);
+        const sinA = accelTmp.crossVectors(tmp, tmp2).dot(forward);
+        this.shipRoll = THREE.MathUtils.lerp(this.shipRoll, Math.atan2(sinA, cosA) + manualRoll, 0.045);
+      }
+      this.camera.up.lerp(this.groundNormal, Math.min(1, dt * 2.2)).normalize();
+    } else {
+      this.shipRoll = THREE.MathUtils.lerp(this.shipRoll, manualRoll, 0.07);
+      this.camera.up.lerp(up, Math.min(1, dt * 2.2)).normalize();
+    }
 
     euler.set(this.shipPitch, this.shipYaw, this.shipRoll, 'YXZ');
     this.rig.quaternion.setFromEuler(euler);
 
-    const shakeAmount = this.firstPerson
+    // La fricción de entrada atmosférica añade sacudida propia (crece con el
+    // calor de reentrada, ver this.entryHeat al final de updateFlight).
+    const shakeAmount = (this.firstPerson
       ? Math.min(this.vel.length() * 0.0009, 0.018)
-      : Math.min(this.vel.length() * 0.0014, 0.035);
+      : Math.min(this.vel.length() * 0.0014, 0.035)) + this.entryHeat * 0.055;
     this.positionChaseCamera(shakeAmount, 7.0, 6.0);
 
     forward.set(0, 0, -1).applyQuaternion(this.rig.quaternion).normalize();
@@ -478,20 +507,13 @@ export class Player {
       this.lightSpeedGamma = 1;
     }
 
-    this.checkAutoLand();
-  }
-
-  // Entrada automática a la superficie: cruzar la atmósfera de un planeta
-  // rocoso basta, sin acercarse con cuidado ni pulsar ninguna tecla.
-  checkAutoLand() {
-    if (this.gameplayMode !== 'free' || !this.terrainProvider?.findNearestBody) return;
-    const body = this.terrainProvider.findNearestBody(this.rig.position);
-    if (!body || body.kind !== 'rocky') return;
-    body.group.getWorldPosition(tmp);
-    if (tmp.distanceTo(this.rig.position) < body.atmosphereRadius) {
-      this.activeAutoLandBody = body;
-      this.land();
-    }
+    // Fricción de entrada atmosférica (estilo NMS): dentro de la atmósfera de
+    // un planeta rocoso el aire frena la nave y, a alta velocidad, la envuelve
+    // en calor (efecto visual manejado en main.js con this.entryHeat).
+    const targetHeat = (this.insideAtmosphere && this.hazard === 'solid')
+      ? THREE.MathUtils.clamp((this.speed - 22) / 80, 0, 1)
+      : 0;
+    this.entryHeat += (targetHeat - this.entryHeat) * Math.min(1, dt * 2.5);
   }
 
   toggleLightSpeed() {
@@ -545,7 +567,9 @@ export class Player {
 
   setEngineTuning(thrustScale, maxSpeed) {
     this.thrustScale = THREE.MathUtils.clamp(Number(thrustScale) || 0.35, 0.10, 2.0);
-    this.maxSpeed = THREE.MathUtils.clamp(Number(maxSpeed) || 18, 3, 600);
+    // Tope alto: con el mundo a escala god-sized hace falta más velocidad para
+    // que el desplazamiento no se sienta lento (los planetas son mucho mayores).
+    this.maxSpeed = THREE.MathUtils.clamp(Number(maxSpeed) || 18, 3, 1600);
   }
 
   // Turbo de "mantener pulsado" (quintuplica el tope de velocidad): activo
@@ -561,12 +585,13 @@ export class Player {
     this.updateTerrainTelemetry();
   }
 
-  // Entrada automática (ver checkAutoLand): basta con estar volando en
-  // Exploración con un proveedor de terreno, sin exigir velocidad baja ni
-  // contacto previo con el suelo — land() ya resuelve la superficie real
-  // sea cual sea la altura de la nave en el momento de disparar.
+  // Aterrizaje MANUAL (estilo NMS): hay que volar bajo, dentro de la
+  // atmósfera de un planeta rocoso, y pulsar la tecla de aterrizar. land()
+  // resuelve la superficie real bajo la trayectoria sea cual sea la altura.
   canLand() {
-    return this.mode === 'flight' && this.gameplayMode === 'free' && !!this.terrainProvider;
+    if (this.mode !== 'flight' || this.gameplayMode !== 'free' || !this.terrainProvider) return false;
+    if (!this.insideAtmosphere || this.hazard !== 'solid') return false;
+    return this.altitudeUnits < (this.landAltitude || 9);
   }
 
   // Aparca la nave sobre el terreno real bajo su trayectoria actual (queda
@@ -578,6 +603,7 @@ export class Player {
   // this.rig.position tal cual, sino la superficie real bajo ese punto.
   land() {
     if (!this.canLand()) return false;
+    this.activeAutoLandBody = this.terrainProvider.findNearestBody?.(this.rig.position) || null;
     forward.set(0, 0, -1).applyQuaternion(this.rig.quaternion);
     const shipGround = this.terrainProvider.sampleTerrain(this.rig.position);
     const shipRestPos = shipGround.center.clone().addScaledVector(shipGround.normal, shipGround.surfaceRadius + 1.1);
@@ -630,9 +656,14 @@ export class Player {
     this.shipRoll = 0;
     this.input.yaw = this.shipYaw;
     this.input.pitch = this.shipPitch;
-    this.vel.set(0, 0, 0);
+    // Despegue (estilo NMS): los propulsores de lanzamiento elevan la nave
+    // verticalmente unos instantes para salir limpio del terreno.
+    this.camera.up.set(0, 1, 0);   // restaurar el "arriba" de vuelo
+    this.vel.copy(this.footUp).multiplyScalar(18);
+    this.rig.position.addScaledVector(this.footUp, 1.6);
     this.parkedShip = null;
     this.mode = 'flight';
+    this.throttle = 1;
     this.positionChaseCamera();
     this.onBoard?.();
     return true;
@@ -674,10 +705,19 @@ export class Player {
     this.footPos.addScaledVector(this.footForward, mz * walkSpeed * dt);
     this.speed = Math.hypot(mx, mz) * walkSpeed;
 
-    if (k.Space && this.footGrounded) {
+    // Salto (toque) + mochila propulsora (mantener Espacio en el aire, estilo
+    // NMS): empuje sostenido hacia arriba mientras quede combustible en el
+    // exotraje; el combustible se regenera al pisar suelo (ver Exosuit).
+    const spaceHeld = !!k.Space;
+    this.jetpacking = false;
+    if (spaceHeld && this.footGrounded && !this._spaceWasHeld) {
       this.footVelY = Math.sqrt(2 * gravity * 1.1);
       this.footGrounded = false;
+    } else if (spaceHeld && !this.footGrounded && (this.exosuit?.jetpack ?? 1) > 0.02) {
+      this.footVelY = Math.min(this.footVelY + (gravity + 7.5) * dt, 9);
+      this.jetpacking = true;
     }
+    this._spaceWasHeld = spaceHeld;
     this.footVelY -= gravity * dt;
     this.footPos.addScaledVector(this.footUp, this.footVelY * dt);
 
@@ -694,28 +734,22 @@ export class Player {
     this.footUp.copy(sample.normal);
 
     this.altitudeMeters = 0;
+    this.altitudeUnits = 0;
     this.biome = sample.biome;
     this.insideAtmosphere = sample.insideAtmosphere;
-    this.flightStatus = this.footGrounded ? 'A PIE' : 'SALTANDO';
+    this.hazard = sample.hazard || 'none';
+    this.hazardLevel = sample.hazardLevel || 0;
+    this.hazardKind = sample.hazardKind || '';
+    this.flightStatus = this.footGrounded ? 'A PIE' : (this.jetpacking ? 'PROPULSOR' : 'SALTANDO');
 
     this.rig.position.copy(this.footPos);
     footBasis.makeBasis(this.footRight, this.footUp, tmp.copy(this.footForward).negate());
     this.rig.quaternion.setFromRotationMatrix(footBasis);
-    if (this.firstPerson) {
-      // Primera persona a pie: solo cámara, nada de cuerpo/manos a la vista
-      // (el modelo del astronauta se oculta por completo, ver Cockpit.applyFootView).
-      this.camera.position.set(0, 0, 0);
-      this.camera.rotation.set(this.footPitch, 0, 0);
-    } else {
-      // Tercera persona: se ve el modelo 3D completo del astronauta. El
-      // punto al que mira la cámara es LOCAL al rig (igual que la nave, ver
-      // positionChaseCamera): hay que convertirlo a mundo antes de lookAt()
-      // o la cámara apuntaría hacia el origen absoluto en vez de al personaje.
-      this.camera.position.copy(this.footChaseCam);
-      tmp2.copy(this.footChaseLook);
-      tmp2.y += this.footPitch * 0.6;
-      this.camera.lookAt(this.rig.localToWorld(cameraTarget.copy(tmp2)));
-    }
+    // A pie SIEMPRE en primera persona (estilo NMS clásico): solo la cámara,
+    // sin modelo de cuerpo/traje a la vista. El rig ya aporta la orientación
+    // tangente al planeta; aquí solo se aplica el cabeceo de la mirada.
+    this.camera.position.set(0, 0, 0);
+    this.camera.rotation.set(this.footPitch, 0, 0);
   }
 
   rotateFootYaw(angle) {
@@ -735,10 +769,13 @@ export class Player {
     }
     const sample = this.terrainProvider.getTelemetryFor(this.rig.position);
     this.altitudeMeters = sample.altitudeMeters;
+    this.altitudeUnits = sample.altitudeUnits || 0;
     this.biome = sample.biome;
     this.insideAtmosphere = sample.insideAtmosphere;
     this.hazard = sample.hazard || 'none';
     this.hazardLevel = sample.hazardLevel || 0;
+    this.hazardKind = sample.hazardKind || '';
+    this.landAltitude = sample.landAltitude || 9;
     return sample;
   }
 
@@ -755,7 +792,10 @@ export class Player {
       return;
     }
     const distance = this.vel.length() * dt;
-    const steps = Math.min(24, Math.max(1, Math.ceil(distance / 1.5)));
+    // Sub-paso de ~4 u: con planetas god-sized (radio mínimo ~40 u) ninguna
+    // velocidad realista atraviesa un cuerpo, y a la vez se hacen menos
+    // muestreos de terreno por frame que con el paso fino anterior (1.5 u).
+    const steps = Math.min(24, Math.max(1, Math.ceil(distance / 4)));
     const subDt = dt / steps;
     for (let i = 0; i < steps; i++) {
       this.rig.position.addScaledVector(this.vel, subDt);
@@ -769,10 +809,20 @@ export class Player {
     if (!this.terrainProvider) return;
     const sample = this.terrainProvider.sampleTerrain(this.rig.position);
     this.altitudeMeters = sample.altitudeMeters;
+    this.altitudeUnits = sample.altitudeUnits || 0;
     this.biome = sample.biome;
     this.insideAtmosphere = sample.insideAtmosphere;
     this.hazard = sample.hazard || 'none';
     this.hazardLevel = sample.hazardLevel || 0;
+    this.hazardKind = sample.hazardKind || '';
+    if (sample.landAltitude) this.landAltitude = sample.landAltitude;
+    if (sample.normal) this.groundNormal.copy(sample.normal);
+
+    // Arrastre atmosférico en planetas rocosos: el aire frena suavemente la
+    // nave (vuelo rasante estilo NMS), sin llegar a detenerla.
+    if (sample.hazard === 'solid' && sample.insideAtmosphere && dt > 0) {
+      this.vel.multiplyScalar(Math.max(0.9, 1 - dt * 0.075));
+    }
 
     if (sample.fatal) {
       this.triggerCollapse(sample, sample.hazard === 'star' ? 'Entrada en fotosfera estelar.' : 'Presion atmosferica critica.');

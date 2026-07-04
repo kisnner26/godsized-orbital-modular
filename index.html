@@ -3,19 +3,84 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GOD-SIZED UNIVERSE — Orion Flight</title>
-  <link rel="stylesheet" href="./css/base.css?v=fps3" />
-  <link rel="stylesheet" href="./css/hud.css?v=lightspeed1" />
+  <title>GOD-SIZED UNIVERSE — Exploración</title>
+  <link rel="stylesheet" href="./css/base.css" />
+  <link rel="stylesheet" href="./css/hud.css" />
 </head>
 <body>
   <canvas id="game"></canvas>
 
-  <div id="boot" class="boot">
-    <div class="boot__small">EVA / ORBITAL OBSERVATION MISSION</div>
-    <div class="boot__title">GOD-SIZED UNIVERSE</div>
-    <div class="boot__status" id="bootStatus">Cargando modelos GLB de Meshy...</div>
-    <button id="startSimulation" class="boot__start" disabled>CARGANDO...</button>
-    <div class="boot__hint">Primero verás una cinemática desde el interior de la nave. Luego controlarás la Orion-07 o entrarás en Exploración para viajar entre sistemas y descender a mundos procedurales.<br>Pulsa <strong>P</strong> (o <strong>Select</strong> en el mando) para abrir ajustes (sonido, modo de juego, gráficos).</div>
+  <div id="boot" class="boot" data-state="studio">
+    <section id="studioSplash" class="studio-splash" aria-label="Presentación del estudio">
+      <span class="studio-splash__small">DESARROLLADO POR</span>
+      <h1>KISNNER'S DEV</h1>
+      <span class="studio-splash__line">Interactive space division</span>
+    </section>
+
+    <section id="bootLoader" class="boot-loader" aria-live="polite">
+      <span class="boot__small">GOD-SIZED UNIVERSE</span>
+      <div class="boot-loader__ring"></div>
+      <div class="boot__status" id="bootStatus">Cargando modelos GLB de Meshy...</div>
+    </section>
+
+    <section id="storyLoading" class="story-loading hidden" aria-live="polite">
+      <span class="boot__small">GOD-SIZED UNIVERSE</span>
+      <h2 id="storyLoadTitle">Preparando la expedición</h2>
+      <p id="storyLoadText">Sincronizando la Orion-07 con la ruta de exploración.</p>
+      <div class="story-loading__bar"><span id="storyLoadBar"></span></div>
+    </section>
+
+    <main id="mainMenu" class="main-menu hidden" aria-label="Menú principal">
+      <section class="main-menu__hero">
+        <span class="main-menu__eyebrow">GOD-SIZED UNIVERSE</span>
+        <h1>Explora el universo</h1>
+        <p>Pilota la <strong>Orion-07</strong> por una galaxia procedural: cruza atmósferas, aterriza en planetas únicos y explora su superficie a pie, a escala real.</p>
+        <div class="main-menu__actions">
+          <button id="startSimulation" class="menu-btn menu-btn--primary" disabled>EXPLORAR</button>
+          <button id="startSolarMode" class="menu-btn" type="button" disabled>SISTEMA SOLAR</button>
+          <button id="openMenuSettings" class="menu-btn" type="button">AJUSTES</button>
+        </div>
+        <div class="main-menu__status" id="menuStatus">Esperando carga de modelos...</div>
+      </section>
+
+      <aside class="zorro-card" aria-label="Sobre la exploración">
+        <div class="zorro-card__body">
+          <span class="zorro-card__tag">EXPLORACIÓN PROCEDURAL</span>
+          <h2>Mundos infinitos</h2>
+          <p>Cada sistema estelar genera planetas rocosos y gigantes gaseosos con bioma, clima, relieve y recursos propios. Vuela bajo, pulsa <strong>F</strong> para aterrizar y minar, escanear y estudiar cada superficie.</p>
+        </div>
+      </aside>
+
+      <section id="menuSettings" class="menu-settings hidden" aria-label="Configuración del menú principal">
+        <header>
+          <span class="menu-settings__eyebrow">CONFIGURACIÓN</span>
+          <button id="closeMenuSettings" type="button" title="Cerrar ajustes">×</button>
+        </header>
+        <div class="menu-settings__grid">
+          <div>
+            <span class="menu-settings__title">Gráficos</span>
+            <div class="menu-settings__choices" role="group" aria-label="Calidad gráfica">
+              <button type="button" data-menu-gfx="gfxLow">Rendimiento</button>
+              <button type="button" data-menu-gfx="gfxMed">Equilibrado</button>
+              <button type="button" data-menu-gfx="gfxHigh">Alta</button>
+              <button type="button" data-menu-gfx="gfxUltra">Ultra</button>
+            </div>
+          </div>
+          <label class="menu-settings__row">Brillo espacial
+            <input id="menuBloom" type="range" min="0" max="120" value="62">
+            <strong id="menuBloomVal">0.62</strong>
+          </label>
+          <label class="menu-settings__row">Volumen
+            <input id="menuVolume" type="range" min="0" max="100" value="34">
+            <strong id="menuVolumeVal">34</strong>
+          </label>
+        </div>
+      </section>
+
+      <footer class="main-menu__legal">
+        <span>KISNNER'S DEV · INTERACTIVE SPACE DIVISION</span>
+        <span>GOD-SIZED UNIVERSE · BUILD 0.9</span>
+      </footer>
   </div>
 
   <div id="helmet" class="helmet hidden">
@@ -25,6 +90,62 @@
   </div>
 
   <div id="interactPrompt" class="prompt hidden">Presiona <b>F</b> para aterrizar</div>
+
+  <!-- ==== Capa de Exploración estilo No Man's Sky ==== -->
+  <!-- Barras del exotraje: salud, soporte vital, protección, mochila -->
+  <div id="suitPanel" class="suit hidden">
+    <div class="suit__row"><span class="suit__label">SALUD</span><div class="suit__bar"><div id="barHealth" class="suit__fill"></div></div></div>
+    <div class="suit__row"><span class="suit__label">SOPORTE VITAL</span><div class="suit__bar"><div id="barLife" class="suit__fill"></div></div></div>
+    <div class="suit__row"><span class="suit__label">PROTECCIÓN</span><div class="suit__bar"><div id="barHazard" class="suit__fill"></div></div></div>
+    <div class="suit__row"><span class="suit__label">PROPULSOR</span><div class="suit__bar"><div id="barJetpack" class="suit__fill"></div></div></div>
+    <div id="suitHazardTag" class="suit__hazard hidden"></div>
+  </div>
+
+  <!-- Toasts de recogida de recursos y avisos -->
+  <div id="toasts" class="toasts"></div>
+
+  <!-- Banner central de descubrimiento (primera visita a un mundo) -->
+  <div id="discovery" class="discovery hidden">
+    <span class="discovery__eyebrow">PLANETA DESCUBIERTO</span>
+    <h2>NOMBRE</h2>
+    <p>detalle</p>
+  </div>
+
+  <!-- Tarjeta de análisis del planeta (al entrar en su atmósfera) -->
+  <div id="planetCard" class="planet-card hidden"></div>
+
+  <!-- Marcadores proyectados del escáner (recursos y fauna) -->
+  <div id="resMarkers" class="res-markers"></div>
+
+  <!-- Pulso visual del escáner -->
+  <div id="scanPulse" class="scan-pulse hidden"></div>
+
+  <!-- Viñeta de calor en la entrada atmosférica -->
+  <div id="entryVignette" class="entry-vignette"></div>
+
+  <!-- Retícula a pie (apuntado del láser de minado) -->
+  <div id="footReticle" class="foot-reticle hidden"></div>
+
+  <!-- Arsenal de superficie (caza de fauna) -->
+  <section id="weaponHud" class="weapon-hud hidden" aria-label="Arsenal de superficie">
+    <header>
+      <span>ARSENAL</span>
+      <strong id="weaponName">Pistola Pulsar</strong>
+    </header>
+    <div id="weaponList" class="weapon-list"></div>
+    <div class="weapon-readout">
+      <span>MUNICIÓN</span>
+      <strong id="weaponAmmo">18/18</strong>
+    </div>
+  </section>
+  <button id="weaponHudToggle" class="weapon-toggle hidden" type="button" aria-pressed="false" title="Ocultar/mostrar arsenal (B)">ARSENAL</button>
+
+  <!-- Panel de inventario del exotraje (tecla I) -->
+  <section id="invPanel" class="invpanel hidden">
+    <header><span>EXOTRAJE · INVENTARIO</span><strong id="invUnits">0 unidades</strong></header>
+    <div id="invGrid" class="inv__grid"></div>
+    <footer>E / R2 minar · C / L2 escanear · R recargar traje · I cerrar</footer>
+  </section>
 
   <section id="hud" class="hud hidden">
     <div class="hud__top">
@@ -347,14 +468,7 @@
     <p id="subtitleText"></p>
   </div>
 
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-    }
-  }
-  </script>
-  <script type="module" src="./js/main.js?v=fps4"></script>
+  <!-- Vite resuelve `three` y `three/addons/*` desde node_modules -->
+  <script type="module" src="./js/main.js"></script>
 </body>
 </html>

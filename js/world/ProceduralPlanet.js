@@ -1,160 +1,19 @@
 import * as THREE from 'three';
+import SURFACE_VERT from '../shaders/surface.vert.glsl';
+import SURFACE_FRAG from '../shaders/surface.frag.glsl';
+import ATMOS_VERT from '../shaders/atmosphere.vert.glsl';
+import ATMOS_FRAG from '../shaders/atmosphere.frag.glsl';
+import WATER_FRAG from '../shaders/water.frag.glsl';
+import CLOUD_FRAG from '../shaders/clouds.frag.glsl';
 
 const scratchA = new THREE.Vector3();
 const scratchB = new THREE.Vector3();
 const scratchC = new THREE.Vector3();
 const scratchD = new THREE.Vector3();
 
-const TERRAIN_GLSL = `
-float hash31(vec3 p) {
-  p = fract(p * 0.1031);
-  p += dot(p, p.yzx + 33.33);
-  return fract((p.x + p.y) * p.z);
-}
-
-float noise3(vec3 x) {
-  vec3 i = floor(x);
-  vec3 f = fract(x);
-  f = f * f * (3.0 - 2.0 * f);
-  float n000 = hash31(i + vec3(0.0, 0.0, 0.0));
-  float n100 = hash31(i + vec3(1.0, 0.0, 0.0));
-  float n010 = hash31(i + vec3(0.0, 1.0, 0.0));
-  float n110 = hash31(i + vec3(1.0, 1.0, 0.0));
-  float n001 = hash31(i + vec3(0.0, 0.0, 1.0));
-  float n101 = hash31(i + vec3(1.0, 0.0, 1.0));
-  float n011 = hash31(i + vec3(0.0, 1.0, 1.0));
-  float n111 = hash31(i + vec3(1.0, 1.0, 1.0));
-  return mix(
-    mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
-    mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y),
-    f.z
-  );
-}
-
-float fbm(vec3 p) {
-  float value = 0.0;
-  float amp = 0.52;
-  for (int i = 0; i < 5; i++) {
-    value += noise3(p) * amp;
-    p *= 2.03;
-    amp *= 0.48;
-  }
-  return value;
-}
-
-float ridged(vec3 p) {
-  float n = 1.0 - abs(noise3(p) * 2.0 - 1.0);
-  return n * n;
-}
-
-float terrainHeight(vec3 dir, float amp) {
-  float continents = smoothstep(0.34, 0.78, fbm(dir * 1.45 + vec3(11.7, 4.1, 8.3)));
-  float plains = fbm(dir * 5.5 + vec3(3.0, 9.5, 2.4));
-  float mountains = ridged(dir * 11.0 + vec3(7.4, 1.7, 5.8));
-  float highlands = smoothstep(0.58, 0.90, fbm(dir * 3.2 + vec3(1.4, 6.8, 12.5)));
-  float h = continents * 0.48 + plains * 0.18 + mountains * highlands * 0.42;
-  h -= 0.18;
-  return h * amp;
-}
-`;
-
-const SURFACE_VERT = `
-uniform float uRadius;
-uniform float uTerrainAmp;
-uniform vec3 uPlanetCenter;
-varying vec3 vWorldPosition;
-varying vec3 vNormalW;
-varying float vHeight;
-varying float vMoisture;
-${TERRAIN_GLSL}
-void main() {
-  vec3 dir = normalize(position);
-  float h = terrainHeight(dir, uTerrainAmp);
-  vec3 displaced = dir * (uRadius + h);
-  vHeight = clamp(h / uTerrainAmp, -1.0, 1.0);
-  vMoisture = fbm(dir * 4.1 + vec3(19.1, 2.3, 13.2));
-  vec4 world = modelMatrix * vec4(displaced, 1.0);
-  vWorldPosition = world.xyz;
-  vNormalW = normalize(mat3(modelMatrix) * dir);
-  gl_Position = projectionMatrix * viewMatrix * world;
-}
-`;
-
-const SURFACE_FRAG = `
-uniform vec3 uSunDirection;
-uniform vec3 uCameraPosition;
-uniform vec3 uPaletteA;
-uniform vec3 uPaletteB;
-uniform vec3 uPaletteC;
-varying vec3 vWorldPosition;
-varying vec3 vNormalW;
-varying float vHeight;
-varying float vMoisture;
-void main() {
-  vec3 n = normalize(vNormalW);
-  float ndl = max(dot(n, normalize(uSunDirection)), 0.0);
-  float hemi = n.y * 0.5 + 0.5;
-
-  vec3 ocean = mix(vec3(0.025, 0.13, 0.26), uPaletteA, 0.32);
-  vec3 shore = mix(vec3(0.54, 0.50, 0.34), uPaletteC, 0.34);
-  vec3 plains = mix(uPaletteA, uPaletteB, 0.34);
-  vec3 forest = mix(uPaletteA * 0.55, uPaletteB, 0.40);
-  vec3 desert = mix(uPaletteC, vec3(0.55, 0.42, 0.22), 0.24);
-  vec3 rock = mix(uPaletteB, vec3(0.42, 0.39, 0.36), 0.42);
-  vec3 snow = vec3(0.82, 0.88, 0.88);
-
-  vec3 land = mix(desert, plains, smoothstep(0.25, 0.68, vMoisture));
-  land = mix(land, forest, smoothstep(0.58, 0.92, vMoisture) * smoothstep(-0.05, 0.28, vHeight));
-  land = mix(land, rock, smoothstep(0.32, 0.62, vHeight));
-  land = mix(land, snow, smoothstep(0.58, 0.88, vHeight) + smoothstep(0.88, 0.98, abs(n.y)));
-  vec3 col = mix(ocean, shore, smoothstep(-0.16, -0.08, vHeight));
-  col = mix(col, land, smoothstep(-0.08, 0.02, vHeight));
-
-  vec3 viewDir = normalize(uCameraPosition - vWorldPosition);
-  float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
-  float diffuse = 0.13 + ndl * 1.05;
-  float bounce = 0.10 * hemi;
-  col *= diffuse + bounce;
-  col += vec3(0.13, 0.34, 0.50) * rim * 0.18;
-  gl_FragColor = vec4(col, 1.0);
-}
-`;
-
-const ATMOS_VERT = `
-varying vec3 vWorldPosition;
-varying vec3 vNormalW;
-void main() {
-  vec4 world = modelMatrix * vec4(position, 1.0);
-  vWorldPosition = world.xyz;
-  vNormalW = normalize(mat3(modelMatrix) * normal);
-  gl_Position = projectionMatrix * viewMatrix * world;
-}
-`;
-
-const ATMOS_FRAG = `
-uniform vec3 uPlanetCenter;
-uniform vec3 uCameraPosition;
-uniform vec3 uSunDirection;
-uniform float uRadius;
-uniform float uAtmosphereRadius;
-varying vec3 vWorldPosition;
-varying vec3 vNormalW;
-void main() {
-  vec3 n = normalize(vWorldPosition - uPlanetCenter);
-  vec3 viewDir = normalize(uCameraPosition - vWorldPosition);
-  vec3 sunDir = normalize(uSunDirection);
-  float camHeight = length(uCameraPosition - uPlanetCenter);
-  float inAtmosphere = 1.0 - smoothstep(uRadius, uAtmosphereRadius, camHeight);
-  float horizon = pow(1.0 - abs(dot(n, viewDir)), 2.35);
-  float sunFacing = smoothstep(-0.25, 0.92, dot(n, sunDir));
-  float miePhase = pow(max(dot(viewDir, sunDir), 0.0), 18.0);
-  vec3 rayleigh = vec3(0.28, 0.58, 1.0) * horizon * (0.50 + sunFacing * 0.95);
-  vec3 mie = vec3(1.0, 0.72, 0.42) * miePhase * horizon * 1.7;
-  vec3 innerSky = vec3(0.24, 0.52, 0.88) * inAtmosphere * (0.20 + sunFacing * 0.34);
-  float alpha = clamp(horizon * (0.28 + inAtmosphere * 0.58) + miePhase * 0.10, 0.0, 0.72);
-  gl_FragColor = vec4(rayleigh + mie + innerSky, alpha);
-}
-`;
+// Fog "apagado": far astronómico para que el smoothstep dé siempre 0.
+const FOG_OFF_NEAR = 1e6;
+const FOG_OFF_FAR = 1e7;
 
 class PlanetChunk {
   constructor(planet, a, b, c, level) {
@@ -170,6 +29,19 @@ class PlanetChunk {
 
   update(cameraWorld) {
     const p = this.planet;
+
+    // Culling de horizonte: a escala planetaria, más de la mitad de los chunks
+    // caen sobre la cara oculta del planeta (por detrás del horizonte). Sin
+    // esto se subdividían y renderizaban miles de parches invisibles — el
+    // origen del desplome de FPS al aterrizar. Si el chunk (con un margen para
+    // los que rozan el limbo) está bajo el horizonte del observador, se libera
+    // por completo y no se toca.
+    if (this.centerDir.dot(p.camDirFromCenter) < p.horizonCos) {
+      if (this.children) this.disposeChildren();
+      this.setMeshVisible(false);
+      return;
+    }
+
     const centerWorld = scratchA.copy(this.centerDir)
       .multiplyScalar(p.radius + p.terrainAmplitude * 0.5)
       .add(p.group.position);
@@ -250,13 +122,27 @@ export class ProceduralPlanet {
     this.metersPerUnit = options.metersPerUnit ?? 1000;
     this.maxLevel = options.maxLevel ?? 4;
     this.patchResolution = options.patchResolution ?? 10;
-    this.lodDistances = options.lodDistances || [
-      this.radius * 7.0,
-      this.radius * 3.9,
-      this.radius * 2.05,
-      this.radius * 1.12,
-      this.radius * 0.62
-    ];
+    // Semilla de terreno: desplaza el dominio del ruido para que cada planeta
+    // tenga una geografía única (misma fórmula, mundo distinto).
+    this.noiseOffset = options.noiseOffset ? options.noiseOffset.clone() : new THREE.Vector3();
+    // Nivel del mar normalizado (-1..1 respecto a terrainAmplitude) o null.
+    this.waterLevel = options.waterLevel ?? null;
+    this.cloudiness = options.cloudiness ?? 0;
+    // Umbrales de subdivisión por nivel, ligados al tamaño angular real del
+    // parche: un chunk de nivel L abarca un arco ≈ (2·R·1.05)/2^L; se divide
+    // cuando la cámara está a menos de ~2.4 de esos arcos. Así la subdivisión
+    // se concentra donde de verdad se ve detalle y no se dispara en la lejanía
+    // (junto con el culling de horizonte, evita los miles de chunks que
+    // hundían los FPS al aterrizar). 13 niveles bastan para que a ras de suelo
+    // el triángulo mida decímetros y la curvatura desaparezca.
+    const chunkArc = this.radius * 2.1;   // arco aproximado del chunk raíz (nivel 0)
+    this.lodDistances = options.lodDistances ||
+      Array.from({ length: 12 }, (_, i) => (chunkArc / 2 ** i) * 1.9);
+    // Culling de horizonte (lo puebla update()): dirección centro→cámara y
+    // coseno del ángulo del horizonte con margen para montañas y chunks que
+    // rozan el limbo.
+    this.camDirFromCenter = new THREE.Vector3(0, 1, 0);
+    this.horizonCos = -1;
     this.time = 0;
     this.lodTimer = 1;
     this.telemetry = {
@@ -275,7 +161,15 @@ export class ProceduralPlanet {
     this.surfaceGroup.name = 'GPU_TERRAIN_QUADTREE';
     this.group.add(this.surfaceGroup);
 
+    // Dirección del sol compartida por TODOS los materiales del planeta
+    // (superficie, atmósfera, agua, nubes): FreeExploration la actualiza cada
+    // cuadro apuntando desde la estrella real del sistema → día/noche reales.
     this.sunDirection = new THREE.Vector3(-0.45, 0.55, 0.70).normalize();
+    // Fog atmosférico compartido (perspectiva aérea durante el descenso):
+    // FreeExploration lo anima vía setFog(); en reposo queda "apagado".
+    this.fogColor = new THREE.Color(0x01040a);
+    this.fogNear = { value: FOG_OFF_NEAR };
+    this.fogFar = { value: FOG_OFF_FAR };
     this.cameraWorld = new THREE.Vector3();
     this.centerWorld = new THREE.Vector3();
     this.worldQuaternion = new THREE.Quaternion();
@@ -287,12 +181,17 @@ export class ProceduralPlanet {
       altitudeUnits: 0,
       altitudeMeters: 0,
       biome: 'ESPACIO',
-      insideAtmosphere: false
+      insideAtmosphere: false,
+      underwater: false
     };
 
     this.surfaceMaterial = this.createSurfaceMaterial();
     this.atmosphere = this.createAtmosphere();
     this.group.add(this.atmosphere);
+    this.water = this.waterLevel !== null ? this.createWater(options.waterColor) : null;
+    if (this.water) this.group.add(this.water);
+    this.clouds = this.cloudiness > 0 ? this.createClouds() : null;
+    if (this.clouds) this.group.add(this.clouds);
 
     this.roots = this.createIcosahedronRoots();
   }
@@ -305,12 +204,19 @@ export class ProceduralPlanet {
         uPlanetCenter: { value: this.group.position },
         uCameraPosition: { value: new THREE.Vector3() },
         uSunDirection: { value: this.sunDirection },
+        uNoiseOffset: { value: this.noiseOffset },
         uPaletteA: { value: new THREE.Color(0x0b356d) },
         uPaletteB: { value: new THREE.Color(0x116050) },
-        uPaletteC: { value: new THREE.Color(0x93cfff) }
+        uPaletteC: { value: new THREE.Color(0x93cfff) },
+        uFogColor: { value: this.fogColor },
+        uFogNear: this.fogNear,
+        uFogFar: this.fogFar
       },
       vertexShader: SURFACE_VERT,
       fragmentShader: SURFACE_FRAG,
+      // Doble cara: red de seguridad contra grietas mínimas de T-junction y
+      // contra ver "por debajo" del suelo al asomarse a un borde.
+      side: THREE.DoubleSide,
       fog: false
     });
   }
@@ -338,6 +244,69 @@ export class ProceduralPlanet {
     return mesh;
   }
 
+  createWater(waterColor) {
+    const seaRadius = this.radius + this.waterLevel * this.terrainAmplitude;
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uPlanetCenter: { value: this.group.position },
+        uCameraPosition: { value: new THREE.Vector3() },
+        uSunDirection: { value: this.sunDirection },
+        uWaterColor: { value: new THREE.Color(waterColor || 0x0d4d7a) },
+        uTime: { value: 0 },
+        uFogColor: { value: this.fogColor },
+        uFogNear: this.fogNear,
+        uFogFar: this.fogFar
+      },
+      vertexShader: ATMOS_VERT,
+      fragmentShader: WATER_FRAG,
+      transparent: true,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(seaRadius, 96, 64), material);
+    mesh.name = 'PLANET_OCEAN';
+    mesh.renderOrder = 1;
+    return mesh;
+  }
+
+  createClouds() {
+    // Capa alta (80% del grosor atmosférico): desde el suelo se ven como un
+    // techo de nubes lejano, no como niebla a la altura de la cabeza.
+    const shellRadius = this.radius + (this.atmosphereRadius - this.radius) * 0.8;
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uPlanetCenter: { value: this.group.position },
+        uCameraPosition: { value: new THREE.Vector3() },
+        uSunDirection: { value: this.sunDirection },
+        uNoiseOffset: { value: this.noiseOffset },
+        uTime: { value: 0 },
+        uCoverage: { value: this.cloudiness }
+      },
+      vertexShader: ATMOS_VERT,
+      fragmentShader: CLOUD_FRAG,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(shellRadius, 72, 48), material);
+    mesh.name = 'PLANET_CLOUDS';
+    mesh.renderOrder = 2;
+    return mesh;
+  }
+
+  // Fog atmosférico de este planeta (lo anima FreeExploration durante el
+  // descenso). Los uniforms son objetos compartidos entre superficie y agua,
+  // así que basta con mutarlos aquí.
+  setFog(color, near, far) {
+    this.fogColor.copy(color);
+    this.fogNear.value = near;
+    this.fogFar.value = far;
+  }
+
+  clearFog() {
+    this.fogNear.value = FOG_OFF_NEAR;
+    this.fogFar.value = FOG_OFF_FAR;
+  }
+
   createIcosahedronRoots() {
     const source = new THREE.IcosahedronGeometry(1, 0);
     const base = source.index ? source.toNonIndexed() : source;
@@ -355,26 +324,36 @@ export class ProceduralPlanet {
   }
 
   buildPatchGeometry(a, b, c, level) {
-    const resolution = Math.max(4, this.patchResolution + level * 2);
+    // Resolución acotada: crecer sin límite con el nivel dispararía el coste
+    // de construcción y de render; 18 basta (a nivel de suelo el triángulo ya
+    // mide decímetros) y baja mucho el recuento de tris frente a 26.
+    const resolution = Math.max(4, Math.min(18, this.patchResolution + level * 2));
+    const R = this.radius;
+    const amp = this.terrainAmplitude;
+    const off = this.noiseOffset;
     const positions = [];
-    const normals = [];
+    const heights = [];    // aHeight = h/amp  (para colorear en el fragment)
+    const moist = [];      // aMoisture
     const indices = [];
     const indexOf = [];
+    const dir = scratchA;
 
+    // ---- Terreno HORNEADO en CPU ----
+    // El desplazamiento se aplica AQUÍ, con la MISMA getHeightAtDirection que
+    // usa la colisión (paridad exacta por construcción, no por replicar el
+    // ruido en dos sitios). El vértex shader ya solo transforma la posición.
     for (let i = 0; i <= resolution; i++) {
       indexOf[i] = [];
       for (let j = 0; j <= resolution - i; j++) {
         const u = i / resolution;
         const v = j / resolution;
         const w = 1 - u - v;
-        const dir = new THREE.Vector3()
-          .addScaledVector(a, w)
-          .addScaledVector(b, u)
-          .addScaledVector(c, v)
-          .normalize();
+        dir.set(0, 0, 0).addScaledVector(a, w).addScaledVector(b, u).addScaledVector(c, v).normalize();
+        const h = this.getHeightAtDirection(dir);
         indexOf[i][j] = positions.length / 3;
-        positions.push(dir.x, dir.y, dir.z);
-        normals.push(dir.x, dir.y, dir.z);
+        positions.push(dir.x * (R + h), dir.y * (R + h), dir.z * (R + h));
+        heights.push(h / amp);
+        moist.push(fbm3(dir, off, 4.1, 19.1, 2.3, 13.2));
       }
     }
 
@@ -391,23 +370,56 @@ export class ProceduralPlanet {
       }
     }
 
+    // Normales del terreno horneado (superficie sola, antes del faldón): así
+    // los vértices del borde reciben una normal suave del propio relieve y no
+    // quedan contaminados por la pared vertical del faldón.
+    const surfGeo = new THREE.BufferGeometry();
+    surfGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions.slice(), 3));
+    surfGeo.setIndex(indices.slice());
+    surfGeo.computeVertexNormals();
+    const normals = Array.from(surfGeo.attributes.normal.array);
+    surfGeo.dispose();
+
+    // ---- Faldón anti-grietas (horneado, vértices PROPIOS) ----
+    // Cada parche baja una cortina vertical por su perímetro hasta ~medio
+    // relieve por debajo del suelo. Al ser vértices duplicados con su propia
+    // normal, tapan las grietas de T-junction entre LODs vecinos SIN alterar
+    // el sombreado de la superficie. skirtDrop en unidades de mundo.
+    const loop = [];
+    for (let i = 0; i <= resolution; i++) loop.push(indexOf[i][0]);
+    for (let k = 1; k <= resolution; k++) loop.push(indexOf[resolution - k][k]);
+    for (let j = resolution - 1; j >= 1; j--) loop.push(indexOf[0][j]);
+    const skirtDrop = amp * 0.9 + 0.05;
+    const rimStart = positions.length / 3;
+    for (const vi of loop) {
+      const px = positions[vi * 3], py = positions[vi * 3 + 1], pz = positions[vi * 3 + 2];
+      const len = Math.hypot(px, py, pz) || 1;
+      // rim superior (copia de la posición del borde)
+      positions.push(px, py, pz);
+      heights.push(heights[vi]); moist.push(moist[vi]);
+      normals.push(px / len, py / len, pz / len);
+      // rim inferior (hundido a lo largo del radio de la posición desplazada)
+      const s = 1 - skirtDrop / len;
+      positions.push(px * s, py * s, pz * s);
+      heights.push(heights[vi]); moist.push(moist[vi]);
+      normals.push(px / len, py / len, pz / len);
+    }
+    const L = loop.length;
+    for (let k = 0; k < L; k++) {
+      const t0 = rimStart + k * 2, b0 = t0 + 1;
+      const t1 = rimStart + ((k + 1) % L) * 2, b1 = t1 + 1;
+      indices.push(t0, b0, b1, t0, b1, t1);   // pared del faldón (una cara basta, material DoubleSide)
+    }
+
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geometry.setAttribute('aHeight', new THREE.Float32BufferAttribute(heights, 1));
+    geometry.setAttribute('aMoisture', new THREE.Float32BufferAttribute(moist, 1));
     geometry.setIndex(indices);
+    // Geometría ya en su posición real (radio+relieve): el bounding sphere
+    // calculado es exacto, sin el antiguo hack de escalarlo.
     geometry.computeBoundingSphere();
-    // El vértex shader desplaza cada vértice de la esfera unitaria hacia
-    // fuera, hasta uRadius+h (con h en ±terrainAmplitude aprox.) — pero
-    // Three.js no sabe nada de eso: su frustum culling usa el bounding
-    // sphere calculado arriba, sobre la geometría SIN desplazar (radio ~1).
-    // Sin corregirlo, esa esfera diminuta casi nunca coincide con dónde
-    // termina apareciendo el parche real en pantalla, así que el culling
-    // descarta parches que sí deberían verse — el terreno "desaparece" de
-    // cerca. Escalamos el bounding sphere por (radius+amplitud) para que
-    // cubra de forma conservadora el rango real del desplazamiento.
-    const reach = this.radius + this.terrainAmplitude;
-    geometry.boundingSphere.center.multiplyScalar(reach);
-    geometry.boundingSphere.radius *= reach;
     return geometry;
   }
 
@@ -419,11 +431,33 @@ export class ProceduralPlanet {
     this.surfaceMaterial.uniforms.uPlanetCenter.value.copy(this.centerWorld);
     this.atmosphere.material.uniforms.uCameraPosition.value.copy(this.cameraWorld);
     this.atmosphere.material.uniforms.uPlanetCenter.value.copy(this.centerWorld);
+    if (this.water) {
+      this.water.material.uniforms.uCameraPosition.value.copy(this.cameraWorld);
+      this.water.material.uniforms.uPlanetCenter.value.copy(this.centerWorld);
+      this.water.material.uniforms.uTime.value = this.time;
+    }
+    if (this.clouds) {
+      this.clouds.material.uniforms.uCameraPosition.value.copy(this.cameraWorld);
+      this.clouds.material.uniforms.uPlanetCenter.value.copy(this.centerWorld);
+      this.clouds.material.uniforms.uTime.value = this.time;
+      this.clouds.rotation.y += dt * 0.004;   // deriva lenta de la capa de nubes
+    }
 
-    this.group.rotation.y += dt * 0.006;
+    // El planeta NO rota sobre sí mismo: el terreno bajo los pies (y los
+    // props instanciados encima) permanecen fijos mientras se explora. El
+    // ciclo día/noche viene de la posición real de la estrella del sistema.
     this.lodTimer += dt;
     if (this.lodTimer >= 0.16) {
       this.lodTimer = 0;
+      // Datos de horizonte para el culling de los chunks: dirección
+      // centro→cámara y coseno del ángulo del horizonte + margen (montañas y
+      // chunks que rozan el limbo). A gran altura R/(R+h)→pequeño y se ve casi
+      // el hemisferio entero; a ras de suelo el cono útil es estrecho.
+      scratchA.copy(this.cameraWorld).sub(this.centerWorld);
+      const camDist = Math.max(this.radius + 0.001, scratchA.length());
+      this.camDirFromCenter.copy(scratchA).multiplyScalar(1 / camDist);
+      const horizonAngle = Math.acos(THREE.MathUtils.clamp(this.radius / camDist, -1, 1));
+      this.horizonCos = Math.cos(Math.min(Math.PI, horizonAngle + 0.16));
       for (const root of this.roots) root.update(this.cameraWorld);
     }
   }
@@ -449,6 +483,8 @@ export class ProceduralPlanet {
     this.sample.altitudeMeters = altitudeMeters;
     this.sample.biome = biome;
     this.sample.insideAtmosphere = distance < this.atmosphereRadius;
+    this.sample.underwater = this.waterLevel !== null &&
+      distance < this.radius + this.waterLevel * this.terrainAmplitude;
     return this.sample;
   }
 
@@ -462,16 +498,17 @@ export class ProceduralPlanet {
   }
 
   getHeightAtDirection(dir) {
-    const continents = smoothstep(0.34, 0.78, fbm3(dir, 1.45, 11.7, 4.1, 8.3));
-    const plains = fbm3(dir, 5.5, 3.0, 9.5, 2.4);
-    const mountains = ridged3(dir, 11.0, 7.4, 1.7, 5.8);
-    const highlands = smoothstep(0.58, 0.90, fbm3(dir, 3.2, 1.4, 6.8, 12.5));
+    const off = this.noiseOffset;
+    const continents = smoothstep(0.34, 0.78, fbm3(dir, off, 1.45, 11.7, 4.1, 8.3));
+    const plains = fbm3(dir, off, 5.5, 3.0, 9.5, 2.4);
+    const mountains = ridged3(dir, off, 11.0, 7.4, 1.7, 5.8);
+    const highlands = smoothstep(0.58, 0.90, fbm3(dir, off, 3.2, 1.4, 6.8, 12.5));
     return (continents * 0.48 + plains * 0.18 + mountains * highlands * 0.42 - 0.18) * this.terrainAmplitude;
   }
 
   getBiomeAtDirection(dir, height) {
     const normalizedHeight = height / this.terrainAmplitude;
-    const moisture = fbm3(dir, 4.1, 19.1, 2.3, 13.2);
+    const moisture = fbm3(dir, this.noiseOffset, 4.1, 19.1, 2.3, 13.2);
     const warmth = 1 - Math.abs(dir.y);
     if (normalizedHeight < -0.09) return 'OCEANO';
     if (normalizedHeight < -0.02) return 'COSTA';
@@ -487,6 +524,8 @@ export class ProceduralPlanet {
     this.surfaceMaterial.dispose();
     this.atmosphere.geometry.dispose();
     this.atmosphere.material.dispose();
+    if (this.water) { this.water.geometry.dispose(); this.water.material.dispose(); }
+    if (this.clouds) { this.clouds.geometry.dispose(); this.clouds.material.dispose(); }
     this.scene.remove(this.group);
   }
 
@@ -500,15 +539,10 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
-// Puerto exacto de hash31() en TERRAIN_GLSL (arriba en este mismo archivo).
-// ¡Debe coincidir bit a bit en estructura con la versión GLSL! Antes esta
-// función usaba un hash distinto (seno + 43758.5453123): dos algoritmos de
-// ruido diferentes que, aunque con la misma estructura de fbm/ridged por
-// encima, generan campos de ruido completamente distintos. Eso hacía que el
-// terreno "de verdad" (el que ve la nave/el jugador al aterrizar, calculado
-// aquí en la CPU) no coincidiera con el terreno que se ve en pantalla (el
-// del shader, en la GPU): la nave podía flotar sobre — o hundirse en — un
-// suelo que visualmente no estaba ahí.
+// Puerto exacto de hash31() en js/shaders/terrain.glsl. ¡Debe coincidir bit a
+// bit en estructura con la versión GLSL! Dos algoritmos de ruido diferentes
+// harían que el terreno "de verdad" (el que pisa la nave/el jugador,
+// calculado aquí en CPU) no coincidiera con el que se ve en pantalla (GPU).
 function fract(x) { return x - Math.floor(x); }
 
 function hash3(x, y, z) {
@@ -545,10 +579,13 @@ function noise3(x, y, z) {
   );
 }
 
-function fbm3(dir, scale, ox, oy, oz) {
-  let x = dir.x * scale + ox;
-  let y = dir.y * scale + oy;
-  let z = dir.z * scale + oz;
+// Réplica CPU de terrainHeight en GLSL: (dir + uNoiseOffset) * escala + offset
+// de octava. La semilla entra sumada a la dirección ANTES de escalar, igual
+// que en el shader, para conservar la paridad bit a bit del campo de ruido.
+function fbm3(dir, off, scale, ox, oy, oz) {
+  let x = (dir.x + off.x) * scale + ox;
+  let y = (dir.y + off.y) * scale + oy;
+  let z = (dir.z + off.z) * scale + oz;
   let value = 0;
   let amp = 0.52;
   for (let i = 0; i < 5; i++) {
@@ -561,7 +598,11 @@ function fbm3(dir, scale, ox, oy, oz) {
   return value;
 }
 
-function ridged3(dir, scale, ox, oy, oz) {
-  const n = 1 - Math.abs(noise3(dir.x * scale + ox, dir.y * scale + oy, dir.z * scale + oz) * 2 - 1);
+function ridged3(dir, off, scale, ox, oy, oz) {
+  const n = 1 - Math.abs(noise3(
+    (dir.x + off.x) * scale + ox,
+    (dir.y + off.y) * scale + oy,
+    (dir.z + off.z) * scale + oz
+  ) * 2 - 1);
   return n * n;
 }

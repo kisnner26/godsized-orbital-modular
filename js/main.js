@@ -1,25 +1,46 @@
 import * as THREE from 'three';
-import { Engine } from './core/Engine.js?v=fps4';
-import { Input } from './systems/Input.js?v=padfeel1';
-import { GamepadController } from './systems/Gamepad.js?v=padfeel2';
+import { Engine } from './core/Engine.js';
+import { Input } from './systems/Input.js';
+import { GamepadController } from './systems/Gamepad.js';
 import { ModelLoader } from './systems/ModelLoader.js';
-import { Narrator } from './systems/Narrator.js?v=queue1';
-import { ShipAudio } from './systems/ShipAudio.js?v=esc';
-import { Radio } from './systems/Radio.js?v=1';
-import { Player } from './world/Player.js?v=padfeel1';
-import { Cockpit } from './world/Cockpit.js?v=astronaut1';
-import { SolarSystem } from './world/SolarSystem.js?v=twoearths1';
-import { FreeExploration } from './world/FreeExploration.js?v=scale1';
-import { buildSpaceEnvironment } from './world/SpaceEnvironment.js?v=galaxies1';
-import { HUD } from './ui/HUD.js?v=lightspeed1';
-import { PhysicsOverlay } from './ui/PhysicsOverlay.js?v=facts2';
-import { GuidedLesson } from './ui/GuidedLesson.js?v=5';
-import { SystemMap2D } from './ui/SystemMap2D.js?v=4';
+import { Narrator } from './systems/Narrator.js';
+import { ShipAudio } from './systems/ShipAudio.js';
+import { Radio } from './systems/Radio.js';
+import { Player } from './world/Player.js';
+import { Cockpit } from './world/Cockpit.js';
+import { SolarSystem } from './world/SolarSystem.js';
+import { FreeExploration } from './world/FreeExploration.js';
+import { buildSpaceEnvironment } from './world/SpaceEnvironment.js';
+import { Inventory } from './systems/Inventory.js';
+import { Exosuit } from './systems/Exosuit.js';
+import { SurfaceGameplay } from './systems/SurfaceGameplay.js';
+import { WeaponSystem } from './systems/WeaponSystem.js';
+import { SuitHUD } from './ui/SuitHUD.js';
+import { HUD } from './ui/HUD.js';
+import { PhysicsOverlay } from './ui/PhysicsOverlay.js';
+import { GuidedLesson } from './ui/GuidedLesson.js';
+import { SystemMap2D } from './ui/SystemMap2D.js';
 
 const canvas = document.getElementById('game');
 const boot = document.getElementById('boot');
 const bootStatus = document.getElementById('bootStatus');
 const startBtn = document.getElementById('startSimulation');
+const startSolarBtn = document.getElementById('startSolarMode');
+const studioSplash = document.getElementById('studioSplash');
+const bootLoader = document.getElementById('bootLoader');
+const storyLoading = document.getElementById('storyLoading');
+const storyLoadTitle = document.getElementById('storyLoadTitle');
+const storyLoadText = document.getElementById('storyLoadText');
+const storyLoadBar = document.getElementById('storyLoadBar');
+const mainMenu = document.getElementById('mainMenu');
+const menuStatus = document.getElementById('menuStatus');
+const openMenuSettingsBtn = document.getElementById('openMenuSettings');
+const closeMenuSettingsBtn = document.getElementById('closeMenuSettings');
+const menuSettings = document.getElementById('menuSettings');
+const menuBloom = document.getElementById('menuBloom');
+const menuBloomVal = document.getElementById('menuBloomVal');
+const menuVolume = document.getElementById('menuVolume');
+const menuVolumeVal = document.getElementById('menuVolumeVal');
 const hudEl = document.getElementById('hud');
 const helmetEl = document.getElementById('helmet');
 const panel = document.getElementById('controlPanel');
@@ -55,6 +76,42 @@ let modeSolar = document.getElementById('modeSolar');
 let modeFree = document.getElementById('modeFree');
 let modeStatus = document.getElementById('modeStatus');
 
+let studioFinished = false;
+let assetsReady = false;
+
+function setBootState(state) {
+  if (boot) boot.dataset.state = state;
+}
+
+function setMainMenuReady(ready, message) {
+  assetsReady = ready;
+  startBtn.disabled = !ready;
+  if (startSolarBtn) startSolarBtn.disabled = !ready;
+  if (menuStatus) menuStatus.textContent = message;
+}
+
+function revealMainMenu() {
+  storyLoading?.classList.add('hidden');
+  mainMenu?.classList.remove('hidden');
+  setBootState('menu');
+}
+
+function revealLoader() {
+  mainMenu?.classList.add('hidden');
+  storyLoading?.classList.add('hidden');
+  setBootState('loading');
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+window.setTimeout(() => {
+  studioFinished = true;
+  if (assetsReady) revealMainMenu();
+  else revealLoader();
+}, 2600);
+
 // Ajustes de rendimiento persistidos (calidad gráfica + FPS objetivo). Se
 // leen ANTES de crear el motor porque el antialias solo puede decidirse al
 // crear el contexto WebGL: el preset "Rendimiento" lo desactiva.
@@ -75,6 +132,89 @@ const freeExploration = new FreeExploration(engine.scene, engine.camera);
 const narrator = new Narrator();
 const shipAudio = new ShipAudio(input, player);
 const radio = new Radio();
+
+// ---- Capa de gameplay estilo No Man's Sky (Exploración) ----
+const inventory = new Inventory();
+const exosuit = new Exosuit(inventory);
+player.exosuit = exosuit;   // combustible de la mochila propulsora a pie
+const suitHud = new SuitHUD(inventory, exosuit);
+const weaponSystem = new WeaponSystem({
+  scene: engine.scene,
+  camera: engine.camera,
+  player,
+  exploration: freeExploration,   // la fauna de la superficie es el objetivo
+  hudEl: document.getElementById('weaponHud'),
+  toggleEl: document.getElementById('weaponHudToggle'),
+  listEl: document.getElementById('weaponList'),
+  nameEl: document.getElementById('weaponName'),
+  ammoEl: document.getElementById('weaponAmmo'),
+  toast: (text, cls, ms) => suitHud.toast(text, cls, ms),
+  onKill: (name, reward) => {
+    inventory.addUnits(reward);
+    suitHud.toast(`<span class="toast__name">Presa abatida: <b>${name}</b></span><span class="toast__qty">+${reward} u</span>`, 'toast--units', 4200);
+  }
+});
+const surfaceGameplay = new SurfaceGameplay({
+  scene: engine.scene,
+  camera: engine.camera,
+  player,
+  exploration: freeExploration,
+  inventory,
+  exosuit,
+  markersEl: document.getElementById('resMarkers'),
+  scanPulseEl: document.getElementById('scanPulse')
+});
+const entryVignette = document.getElementById('entryVignette');
+const footReticle = document.getElementById('footReticle');
+
+surfaceGameplay.onScanInfo = (text) => suitHud.toast(text, '', 5200);
+surfaceGameplay.onCreature = (name, reward) => {
+  suitHud.toast(`<span class="toast__name">Especie analizada: <b>${name}</b></span><span class="toast__qty">+${reward} u</span>`, 'toast--units', 5600);
+};
+
+exosuit.onWarning = (text) => {
+  suitHud.toast(text, 'toast--warn', 5600);
+  narrator.say(text, 5200);
+};
+exosuit.onDeath = () => {
+  // Fallo del exotraje: los sistemas de emergencia reaniman al piloto junto a
+  // la nave aparcada (sin perder inventario, estilo NMS suave).
+  if (player.mode === 'onfoot' && player.parkedShip) {
+    player.footPos.copy(player.parkedShip.position).addScaledVector(player.footUp, 1.2);
+    player.footVelY = 0;
+  }
+  exosuit.refill();
+  suitHud.toast('<b>EL EXOTRAJE HA FALLADO</b> · Reanimación de emergencia junto a la nave', 'toast--danger', 7000);
+  narrator.say('Fallo crítico del exotraje. Los sistemas de emergencia te han reanimado junto a la nave.', 6500);
+};
+
+freeExploration.onEnterAtmosphere = (body, isNew) => {
+  suitHud.showPlanetCard(body);
+  if (isNew) {
+    const reward = 150 + Math.floor(Math.random() * 100);
+    inventory.addUnits(reward);
+    suitHud.showDiscovery('PLANETA DESCUBIERTO', body.name.toUpperCase(), `${body.biomeLabel} · ${body.weather} · +${reward} unidades`);
+    narrator.say(`Nuevo mundo registrado: ${body.name}. Bioma ${body.biomeLabel.toLowerCase()}. ${body.hazardKind ? 'Precaución: ' + body.hazardKind.toLowerCase() + '.' : 'Condiciones benignas.'}`, 8000);
+  } else {
+    narrator.say(`Entrando en la atmósfera de ${body.name}. Desciende y pulsa F a baja altura para aterrizar.`, 6000);
+  }
+};
+freeExploration.onExitAtmosphere = () => {
+  suitHud.hidePlanetCard();
+  surfaceGameplay.clearMarkers();
+  surfaceGameplay.stopMining();
+};
+
+function doSuitRecharge() {
+  if (gameplayMode !== 'free' || player.mode !== 'onfoot') return;
+  const result = exosuit.recharge();
+  if (result) {
+    suitHud.toast(`Exotraje recargado: ${result}`, '', 4200);
+    surfaceGameplay.pickupBlip(660);
+  } else {
+    suitHud.toast('Sin recursos para recargar (Carbono, Oxígeno o Sodio).', 'toast--warn', 4600);
+  }
+}
 const physics = new PhysicsOverlay(solar);
 const map2d = new SystemMap2D();
 map2d.onToggle = (open) => {
@@ -115,7 +255,11 @@ const lesson = new GuidedLesson({
 engine.scene.add(player.rig);
 const spaceEnv = buildSpaceEnvironment(engine.scene);
 const sky = spaceEnv.sky;
-solar.build();
+// solar.build() se DIFIERE a la primera entrada en modo Sistema Solar (abajo,
+// vía ensureSolarBuilt) para que arrancar en Exploración sea mucho más rápido:
+// el modo solar construye 8 planetas de alta teselación, el Sol, 2200
+// asteroides y texturas remotas, y casi nadie lo necesita al arrancar.
+function ensureSolarBuilt() { solar.build(); }
 
 const _camWorld = new THREE.Vector3();
 const fade = document.getElementById('fade');
@@ -129,7 +273,10 @@ let lastShipEvent = '';
 let shipEventCooldown = 0;
 let introState = -1;   // -1 sin iniciar, 0..3 fases de la cinemática
 let gameplayMode = 'solar';
-const MODE_SPEED_LIMITS = { solar: 300, free: 600 };
+// El mundo de Exploración es god-sized (WORLD_SCALE): sube el tope de velocidad
+// para que cruzar entre planetas grandes no se sienta lento. El modo solar
+// mantiene su escala propia.
+const MODE_SPEED_LIMITS = { solar: 300, free: 1600 };
 
 function refreshGameplayControls() {
   modeSolar = modeSolar || document.getElementById('modeSolar');
@@ -140,6 +287,7 @@ function refreshGameplayControls() {
 // Al pulsar INICIAR: arranca la cinemática de abordaje en primera persona.
 function startSimulation() {
   if (gameplayMode === 'free') return startFreeSimulation();
+  ensureSolarBuilt();   // modo solar: construir el sistema si aún no existe
 
   shipAudio.start();
   boot.classList.add('hidden');
@@ -178,9 +326,23 @@ function startFreeSimulation() {
   shipRadio?.classList.remove('hidden');
   controlsHint.classList.remove('hidden');
   setSpeedLimitForMode('free', MODE_SPEED_LIMITS.free);
-  if (missionTitle) missionTitle.textContent = 'ORION-07 / EXPLORACION';
+  if (missionTitle) missionTitle.textContent = 'ORION-07 / EXPLORACIÓN';
   updateControlsHint();
-  narrator.say('Exploracion activa. El sistema solar usa distancias orbitales proporcionales y hay otros sistemas procedurales. Los rocosos permiten descenso; los gaseosos y las estrellas son letales.', 8500);
+  narrator.say('Exploración activa. Cada planeta rocoso es un mundo único con bioma, clima y recursos propios. Cruza una atmósfera, vuela bajo y pulsa F para aterrizar y explorar a pie.', 9000);
+}
+
+function startExplorationFromMenu() {
+  if (!assetsReady || startBtn.disabled) return;
+  boot.classList.add('hidden');
+  setGameplayMode('free');
+  startFreeSimulation();
+}
+
+function startSolarFromMenu() {
+  if (!assetsReady || startSolarBtn?.disabled) return;
+  ensureSolarBuilt();
+  setGameplayMode('solar');
+  startSimulation();
 }
 
 // Transición a vuelo manual (tras la cinemática de abordaje).
@@ -448,7 +610,7 @@ function setGameplayMode(mode) {
   modeSolar?.setAttribute('aria-pressed', String(mode === 'solar'));
   modeFree?.setAttribute('aria-pressed', String(mode === 'free'));
   if (modeStatus) modeStatus.textContent = mode === 'solar' ? 'Órbitas y observación' : 'Exploración procedural';
-  if (!startBtn.disabled) startBtn.textContent = mode === 'solar' ? 'INICIAR SIMULACIÓN' : 'INICIAR EXPLORACIÓN';
+  if (!startBtn.disabled) startBtn.textContent = 'EXPLORAR';
   document.body.classList.toggle('is-free-mode', mode === 'free');
 
   lesson.stop();
@@ -469,7 +631,15 @@ function setGameplayMode(mode) {
     menuShown = false;
     if (hasStarted) startFreeSimulation();
   } else {
+    ensureSolarBuilt();   // cambiar a modo solar: construir si aún no existe
     freeExploration.exit(player);
+    suitHud.setVisible(false);
+    suitHud.hidePlanetCard();
+    suitHud.invPanel.classList.add('hidden');
+    footReticle.classList.add('hidden');
+    surfaceGameplay.stopMining();
+    surfaceGameplay.clearMarkers();
+    entryVignette.style.opacity = '0';
     solar.group.visible = true;
     if (hasStarted) {
       player.exitObservation();
@@ -490,7 +660,10 @@ function setGameplayMode(mode) {
   updateControlsHint();
 }
 
-startBtn.addEventListener('click', startSimulation);
+startBtn.addEventListener('click', startExplorationFromMenu);
+startSolarBtn?.addEventListener('click', startSolarFromMenu);
+openMenuSettingsBtn?.addEventListener('click', () => menuSettings?.classList.toggle('hidden'));
+closeMenuSettingsBtn?.addEventListener('click', () => menuSettings?.classList.add('hidden'));
 document.addEventListener('click', e => {
   if (e.target.closest('#modeSolar')) setGameplayMode('solar');
   if (e.target.closest('#modeFree')) setGameplayMode('free');
@@ -505,6 +678,7 @@ let paused = false;
 function openSettings() {
   paused = true;
   settingsMenu.classList.remove('hidden');
+  surfaceGameplay.stopMining();   // corta el láser (y su sonido) al pausar
   input.unlock();   // mostrar cursor para interactuar
 }
 function closeSettings() {
@@ -523,7 +697,15 @@ const setVolume = document.getElementById('setVolume');
 const setVolumeVal = document.getElementById('setVolumeVal');
 setVolume.addEventListener('input', () => {
   setVolumeVal.textContent = setVolume.value;
+  if (menuVolume && menuVolume !== document.activeElement) menuVolume.value = setVolume.value;
+  if (menuVolumeVal) menuVolumeVal.textContent = setVolume.value;
   shipAudio.setMasterVolume(Number(setVolume.value) / 100);
+});
+menuVolume?.addEventListener('input', () => {
+  setVolume.value = menuVolume.value;
+  setVolumeVal.textContent = menuVolume.value;
+  if (menuVolumeVal) menuVolumeVal.textContent = menuVolume.value;
+  shipAudio.setMasterVolume(Number(menuVolume.value) / 100);
 });
 // Radio de a bordo: rock de los 90 (emisoras reales via radio-browser.info)
 radio.onStationChange = label => { if (radioStation) radioStation.textContent = label; };
@@ -547,6 +729,15 @@ const setBloomVal = document.getElementById('setBloomVal');
 setBloom.addEventListener('input', () => {
   const s = Number(setBloom.value) / 100;
   setBloomVal.textContent = s.toFixed(2);
+  if (menuBloom && menuBloom !== document.activeElement) menuBloom.value = setBloom.value;
+  if (menuBloomVal) menuBloomVal.textContent = s.toFixed(2);
+  engine.bloom.strength = s;
+});
+menuBloom?.addEventListener('input', () => {
+  const s = Number(menuBloom.value) / 100;
+  setBloom.value = menuBloom.value;
+  setBloomVal.textContent = s.toFixed(2);
+  if (menuBloomVal) menuBloomVal.textContent = s.toFixed(2);
   engine.bloom.strength = s;
 });
 const GFX = {
@@ -562,6 +753,7 @@ const GFX = {
 function applyGraphics(preset) {
   const cfg = GFX[preset]; if (!cfg) return;
   Object.keys(GFX).forEach(id => document.getElementById(id).classList.toggle('active', id === preset));
+  document.querySelectorAll('[data-menu-gfx]').forEach(btn => btn.classList.toggle('active', btn.dataset.menuGfx === preset));
   engine.renderer.setPixelRatio(Math.min(devicePixelRatio, cfg.pr));
   engine.composer.setSize(innerWidth, innerHeight);
   engine.renderer.shadowMap.enabled = cfg.shadows;
@@ -569,11 +761,18 @@ function applyGraphics(preset) {
   engine.bloom.strength = cfg.bloom;
   setBloom.value = Math.round(cfg.bloom * 100);
   setBloomVal.textContent = cfg.bloom.toFixed(2);
+  if (menuBloom) menuBloom.value = setBloom.value;
+  if (menuBloomVal) menuBloomVal.textContent = cfg.bloom.toFixed(2);
   freeExploration.setMaxLevel?.(cfg.maxLevel);
   savePerf({ gfx: preset });
 }
 Object.keys(GFX).forEach(id => document.getElementById(id).addEventListener('click', () => applyGraphics(id)));
+document.querySelectorAll('[data-menu-gfx]').forEach(btn => {
+  btn.addEventListener('click', () => applyGraphics(btn.dataset.menuGfx));
+});
 shipAudio.setMasterVolume(Number(setVolume.value) / 100);
+if (menuVolume) menuVolume.value = setVolume.value;
+if (menuVolumeVal) menuVolumeVal.textContent = setVolume.value;
 
 // GPU integrada detectada y sin preferencia guardada → arrancar en
 // "Rendimiento". Es el caso típico del portátil Windows que va a tirones
@@ -671,46 +870,55 @@ function setFlightView(first) {
 function toggleFlightView() {
   if (player.mode === 'flight') setFlightView(!player.firstPerson);
   else if (player.mode === 'onfoot') {
-    player.firstPerson = !player.firstPerson;
-    cockpit.applyFootView(player.firstPerson);
+    player.firstPerson = true;
+    cockpit.applyFootView();
     updateControlsHint();
   }
 }
 
-// La entrada a la superficie ahora es automática (ver player.checkAutoLand /
-// player.onLand más abajo). Solo volver a abordar la nave sigue siendo una
-// acción deliberada (tecla F, cerca de donde quedó aparcada).
+// Interacción deliberada (tecla F / Triángulo, estilo NMS): aterrizar la nave
+// volando bajo dentro de la atmósfera, o volver a abordarla estando a pie
+// junto a donde quedó aparcada. Ya no hay aterrizaje automático.
 function tryInteract() {
   if (player.canBoard()) {
     cockpit.hideLandedMarker();
     player.board();
+  } else if (player.canLand()) {
+    player.land();
   }
 }
 
 player.onLand = () => {
   cockpit.showLandedMarker(player.parkedShip.position, player.parkedShip.quaternion);
   cockpit.startOnFoot();
-  player.firstPerson = false;   // se entra a la superficie en tercera persona
-  cockpit.applyFootView(false);
-  freeExploration.enterSurfaceMode(player.activeAutoLandBody);
+  player.firstPerson = true;
+  cockpit.applyFootView();
   input.lock();
   speedo.classList.add('hidden');
   speedControl.classList.add('hidden');
   shipRadio?.classList.add('hidden');
+  suitHud.setVisible(true);
+  footReticle.classList.remove('hidden');
   if (missionTitle) missionTitle.textContent = 'A PIE / EXPLORACIÓN SUPERFICIE';
   updateControlsHint();
-  narrator.say('Entrada a la superficie completada. Traje presurizado: puedes explorar a pie.', 6500);
+  narrator.say('Aterrizaje completado. Traje presurizado: mina con E, escanea con C, recarga el traje con R y usa el arsenal (1-9) para cazar la fauna.', 8000);
 };
 
 player.onBoard = () => {
   cockpit.startFlight();
-  freeExploration.exitSurfaceMode();
+  // El foco atmosférico se mantiene: seguimos dentro de la atmósfera y la
+  // superficie viva solo se libera al salir de ella (ver FreeExploration).
+  surfaceGameplay.stopMining();
+  surfaceGameplay.clearMarkers();
   speedo.classList.remove('hidden');
   speedControl.classList.remove('hidden');
   shipRadio?.classList.remove('hidden');
-  if (missionTitle) missionTitle.textContent = 'ORION-07 / EXPLORACION';
+  suitHud.setVisible(false);
+  footReticle.classList.add('hidden');
+  suitHud.invPanel.classList.add('hidden');
+  if (missionTitle) missionTitle.textContent = 'ORION-07 / EXPLORACIÓN';
   updateControlsHint();
-  narrator.say('De vuelta a bordo. Motores listos para despegar.', 4200);
+  narrator.say('Propulsores de despegue activados. Acelera para ganar altura.', 4600);
 };
 
 // Rueda del ratón: zoom en observación.
@@ -729,6 +937,16 @@ input.onKeyDown = (code) => {
   if (code === 'KeyC' && gameplayMode === 'solar') panel.classList.toggle('hidden');
   if (code === 'KeyV') toggleFlightView();
   if (code === 'KeyF' && gameplayMode === 'free') tryInteract();
+  if (code === 'KeyC' && gameplayMode === 'free' && player.mode === 'onfoot') surfaceGameplay.scan();
+  if (gameplayMode === 'free' && player.mode === 'onfoot') {
+    if (/^Digit[1-9]$/.test(code)) { weaponSystem.select(Number(code.slice(5)) - 1); return; }
+    if (code === 'KeyX') { weaponSystem.reload(); return; }
+    if (code === 'KeyB') { weaponSystem.toggleHudCollapsed(); return; }
+    if (code === 'KeyQ') { weaponSystem.next(-1); return; }
+    if (code === 'KeyE' && input.keys.AltLeft) { weaponSystem.next(1); return; }
+  }
+  if (code === 'KeyR' && gameplayMode === 'free') doSuitRecharge();
+  if (code === 'KeyI' && gameplayMode === 'free' && (player.mode === 'onfoot' || player.mode === 'flight')) suitHud.toggleInventory();
   if (code === 'KeyL' && gameplayMode === 'free') {
     const active = player.toggleLightSpeed();
     narrator.say(
@@ -840,6 +1058,8 @@ const gamepad = new GamepadController(input, {
   zoom: (f) => { if (player.mode === 'observe') player.zoomObservation(f); },
   exitObserve: () => { if (player.mode === 'observe') exitObserveMode(); },
   interact: () => tryInteract(),
+  scan: () => { if (gameplayMode === 'free' && player.mode === 'onfoot') surfaceGameplay.scan(); },
+  recharge: () => doSuitRecharge(),
   toggleMap: () => { if (player.mode === 'observe') map2d.toggle(); },
   onConnect: (name) => {
     padConnected = true;
@@ -861,12 +1081,14 @@ const HINTS = {
   ],
   free: [
     ['L-Stick / ←→↑↓', 'Girar'], ['R2 / ✕', 'Acelerar'], ['L2 / ◯', 'Frenar'],
-    ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['L3', 'Impulso'],
-    ['M / R3', 'Turbo x5'], ['V / D-Pad ▶', '1ª / 3ª persona'], ['L', 'Velocidad luz']
+    ['L1 R1', 'Lateral'], ['△ / ▢', 'Subir / Bajar'], ['M / R3', 'Turbo x5'],
+    ['F', 'Aterrizar (bajo)'], ['I', 'Inventario'], ['V', '1ª / 3ª persona'], ['L', 'Velocidad luz']
   ],
   onfoot: [
-    ['L-Stick / WASD', 'Caminar'], ['R-Stick / ←→↑↓', 'Girar / Mirar'], ['L1 / Shift', 'Correr'],
-    ['✕ / Espacio', 'Saltar'], ['△ / F', 'Volver a la nave'], ['▢', '1ª / 3ª persona']
+    ['L-Stick / WASD', 'Caminar'], ['R-Stick / ←→↑↓', 'Mirar'], ['L1 / Shift', 'Correr'],
+    ['✕ / Espacio', 'Saltar · mantener: propulsor'], ['E / R2', 'Minar'], ['C / L2', 'Escáner'],
+    ['Click', 'Disparar'], ['1-9', 'Armas'], ['X', 'Recargar arma'], ['B', 'Ocultar arsenal'], ['R / ◯', 'Recargar traje'],
+    ['I', 'Inventario'], ['△ / F', 'Volver a la nave']
   ],
   observe: [
     ['D-Pad ◀ ▶', 'Cambiar cuerpo'], ['Rueda / L2 R2', 'Zoom'], ['◯', 'Salir'], ['C', 'Condiciones'],
@@ -888,14 +1110,16 @@ const hud = new HUD(player, solar, freeExploration);
 async function bootGame() {
   try {
     await cockpit.loadAll(player.rig, engine.camera);
-    bootStatus.textContent = 'Cinemática interior lista. Inicia simulación orbital o cambia a Exploración para viajar entre sistemas procedurales.';
-    startBtn.disabled = false;
-    startBtn.textContent = gameplayMode === 'solar' ? 'INICIAR SIMULACIÓN' : 'INICIAR EXPLORACIÓN';
+    bootStatus.textContent = 'Motores, cabina y modelos listos.';
+    startBtn.textContent = 'EXPLORAR';
+    setMainMenuReady(true, 'Listo para explorar.');
+    if (studioFinished) revealMainMenu();
   } catch (err) {
     console.error(err);
-    bootStatus.textContent = 'No se pudo cargar un GLB. Revisa consola. Puedes iniciar con el entorno base.';
-    startBtn.disabled = false;
-    startBtn.textContent = gameplayMode === 'solar' ? 'INICIAR SIN MODELOS' : 'INICIAR EXPLORACIÓN';
+    bootStatus.textContent = 'No se pudo cargar un GLB. Puedes iniciar con el entorno base.';
+    startBtn.textContent = 'EXPLORAR';
+    setMainMenuReady(true, 'Modelos incompletos; el entorno base está disponible.');
+    if (studioFinished) revealMainMenu();
   }
 }
 
@@ -910,6 +1134,7 @@ engine.addUpdater(dt => {
   }
   player.setTurbo(input.keys.KeyM);
   player.update(dt);
+  weaponSystem.update(dt, gameplayMode === 'free' && player.mode === 'onfoot');
   // Efecto visual de velocidad luz: estelas radiales + viraje de color, suavizado
   // para que no salte de golpe al acelerar/frenar.
   const targetWarp = gameplayMode === 'free' ? player.lightSpeedBeta : 0;
@@ -921,8 +1146,30 @@ engine.addUpdater(dt => {
   if (gameplayMode === 'free' && player.canBoard()) {
     interactPrompt.innerHTML = 'Presiona <b>F</b> para volver a la nave';
     interactPrompt.classList.remove('hidden');
+  } else if (gameplayMode === 'free' && player.canLand()) {
+    interactPrompt.innerHTML = 'Presiona <b>F</b> para aterrizar';
+    interactPrompt.classList.remove('hidden');
   } else {
     interactPrompt.classList.add('hidden');
+  }
+
+  // ---- Bucle NMS: minería, exotraje, viñeta de entrada atmosférica ----
+  if (gameplayMode === 'free') {
+    const miningHeld = player.mode === 'onfoot' && (input.keys.KeyE || (input.thrustFwd || 0) > 0.3);
+    surfaceGameplay.update(dt, miningHeld);
+    exosuit.update(dt, {
+      onFoot: player.mode === 'onfoot',
+      inShip: player.mode === 'flight',
+      running: player.mode === 'onfoot' && player.speed > 3.4,
+      jetpacking: player.jetpacking,
+      grounded: player.footGrounded,
+      hazardLevel: player.mode === 'onfoot' ? player.hazardLevel : 0,
+      hazardKind: player.hazardKind
+    });
+    suitHud.update();
+    entryVignette.style.opacity = player.mode === 'flight' ? (player.entryHeat * 0.85).toFixed(2) : '0';
+  } else {
+    entryVignette.style.opacity = '0';
   }
   shipEventCooldown = Math.max(0, shipEventCooldown - dt);
   if (gameplayMode === 'free' && player.statusEvent && player.statusEvent !== lastShipEvent && shipEventCooldown <= 0) {
@@ -934,6 +1181,8 @@ engine.addUpdater(dt => {
   engine.camera.getWorldPosition(_camWorld);
   sky.position.copy(_camWorld);   // el cielo sigue a la cámara (skybox)
   spaceEnv.stars.userData.uniforms.uTime.value += dt;
+  // Transición atmosférica: el cielo profundo se funde según el descenso.
+  spaceEnv.setFade(gameplayMode === 'free' ? freeExploration.skyFade : 0);
   spaceEnv.update(dt);
   cockpit.update(dt, player);
   if (gameplayMode === 'solar') solar.update(dt);
@@ -962,8 +1211,14 @@ engine.addUpdater(dt => {
 // del motor (requestAnimationFrame). Se ejecuta tras los updaters (player ya
 // actualizado) y solo trabaja cuando Exploración está activa.
 engine.mountWorldSystem({
-  update: (dt) => { if (!paused && gameplayMode === 'free') freeExploration.update(dt, player); }
+  update: (dt) => {
+    if (paused) return;
+    if (gameplayMode === 'free') freeExploration.update(dt, player);
+  }
 });
 
 engine.start();
 bootGame();
+
+// Hook de depuración (consola): window.orion.player, .freeExploration, etc.
+window.orion = { engine, player, freeExploration, inventory, exosuit, surfaceGameplay, suitHud, cockpit, weaponSystem };

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import STARS_VERT from '../shaders/stars.vert.glsl';
+import STARS_FRAG from '../shaders/stars.frag.glsl';
 
 const tmpHead = new THREE.Vector3();
 const tmpTail = new THREE.Vector3();
@@ -21,6 +23,14 @@ export function buildSpaceEnvironment(scene) {
   const sky = new THREE.Group();
   scene.add(sky);
 
+  // Escala planetaria: los planetas orbitan a millones de unidades (1 AU =
+  // 300.000 u). El cielo (estrellas, vía láctea, nebulosas, galaxias) debe
+  // quedar MÁS LEJOS que el planeta más externo del sistema (~9e6) o su
+  // esfera translúcida se dibujaría por delante de los planetas lejanos. Todo
+  // el firmamento se aleja ×SKY_SCALE; sigue a la cámara (skybox), así que su
+  // radio absoluto solo importa para el orden de dibujo, no para el paralaje.
+  const SKY_SCALE = 1;
+
   const N = 80000;
   const pos = new Float32Array(N*3);
   const col = new Float32Array(N*3);
@@ -28,7 +38,7 @@ export function buildSpaceEnvironment(scene) {
   const size = new Float32Array(N);
   const color = new THREE.Color();
   for (let i=0;i<N;i++) {
-    const r = 900 + Math.random()*2500;
+    const r = (900 + Math.random()*2500) * SKY_SCALE;
     const theta = Math.random()*Math.PI*2;
     const phi = Math.acos(2*Math.random()-1);
     pos[i*3] = r*Math.sin(phi)*Math.cos(theta);
@@ -45,36 +55,16 @@ export function buildSpaceEnvironment(scene) {
   geo.setAttribute('aPhase', new THREE.BufferAttribute(phase,1));
   geo.setAttribute('aSize', new THREE.BufferAttribute(size,1));
 
-  // Estrellas con parpadeo sutil: cada una tiene su propia fase (aPhase), así
-  // el brillo y el tamaño oscilan de forma independiente en vez de latir todas
-  // a la vez. El tamaño en pantalla usa la misma atenuación por distancia que
-  // THREE.PointsMaterial (300 / -z) para que se vea igual que antes al volar.
-  const starUniforms = { uTime: { value: 0 } };
+  // Estrellas con parpadeo sutil (shaders en js/shaders/stars.*.glsl). uFade
+  // las funde con el cielo al descender a un planeta iluminado.
+  // uPointScale: tamaño aparente en px = aSize·uPointScale/(-z). Con el cielo
+  // a z≈SKY_SCALE·2000 hace falta un factor grande para que la estrella no
+  // caiga a sub-píxel. Se calibra para ~1.5-3 px por estrella.
+  const starUniforms = { uTime: { value: 0 }, uFade: { value: 0 }, uPointScale: { value: 300 } };
   const starMat = new THREE.ShaderMaterial({
     uniforms: starUniforms,
-    vertexShader: `
-      attribute vec3 color;
-      attribute float aPhase;
-      attribute float aSize;
-      uniform float uTime;
-      varying vec3 vColor;
-      varying float vTwinkle;
-      void main() {
-        vColor = color;
-        float tw = sin(uTime * (1.4 + fract(aPhase) * 1.6) + aPhase * 3.0) * 0.5 + 0.5;
-        vTwinkle = 0.5 + tw * 0.7;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = aSize * vTwinkle * (300.0 / -mvPosition.z);
-        gl_Position = projectionMatrix * mvPosition;
-      }`,
-    fragmentShader: `
-      varying vec3 vColor;
-      varying float vTwinkle;
-      void main() {
-        vec2 uv = gl_PointCoord - 0.5;
-        float alpha = smoothstep(0.5, 0.0, length(uv));
-        gl_FragColor = vec4(vColor * vTwinkle, alpha * 0.92);
-      }`,
+    vertexShader: STARS_VERT,
+    fragmentShader: STARS_FRAG,
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending
@@ -84,7 +74,7 @@ export function buildSpaceEnvironment(scene) {
   sky.add(stars);
 
   const milky = new THREE.Mesh(
-    new THREE.SphereGeometry(3600, 64, 32),
+    new THREE.SphereGeometry(3600 * SKY_SCALE, 64, 32),
     new THREE.MeshBasicMaterial({
       map: makeMilkyTexture(), side: THREE.BackSide, transparent:true, opacity:.42, depthWrite:false
     })
@@ -100,23 +90,44 @@ export function buildSpaceEnvironment(scene) {
       map: nebTex, color: nebColors[i], transparent:true, opacity:0.11 + Math.random()*0.07,
       blending: THREE.AdditiveBlending, depthWrite:false
     }));
-    const r = 3000;
+    const r = 3000 * SKY_SCALE;
     const th = Math.random()*Math.PI*2, ph = Math.acos(2*Math.random()-1);
     spr.position.set(r*Math.sin(ph)*Math.cos(th), r*Math.sin(ph)*Math.sin(th)*0.6, r*Math.cos(ph));
-    const s = 1300 + Math.random()*1500;
+    const s = (1300 + Math.random()*1500) * SKY_SCALE;
     spr.scale.set(s, s, 1);
     sky.add(spr);
   }
 
-  const constellations = makeConstellations();
+  const constellations = makeConstellations(SKY_SCALE);
   sky.add(constellations);
 
-  makeGalaxies(sky);
-  const shootingStars = makeShootingStars(sky);
+  makeGalaxies(sky, SKY_SCALE);
+  const shootingStars = makeShootingStars(sky, SKY_SCALE);
+
+  // Desvanecimiento atmosférico del cielo profundo: al descender a un planeta
+  // iluminado, estrellas, vía láctea, nebulosas, galaxias y constelaciones se
+  // funden tras el cielo (0 = espacio pleno, 1 = ocultas). Se cachea la
+  // opacidad base de cada material para poder escalarla sin acumulación.
+  const shootingLines = new Set(shootingStars.map(s => s.line));
+  const fadeTargets = [];
+  sky.traverse(o => {
+    if (!o.material || o === stars || shootingLines.has(o)) return;
+    if (o.material.transparent && typeof o.material.opacity === 'number') {
+      fadeTargets.push({ material: o.material, base: o.material.opacity });
+    }
+  });
+  let skyFade = 0;
 
   return {
     sky, stars, milky, constellations,
-    update(dt) { updateShootingStars(shootingStars, dt); }
+    setFade(f) {
+      f = THREE.MathUtils.clamp(f, 0, 1);
+      if (Math.abs(f - skyFade) < 0.002) return;
+      skyFade = f;
+      starUniforms.uFade.value = f;
+      for (const t of fadeTargets) t.material.opacity = t.base * (1 - f);
+    },
+    update(dt) { updateShootingStars(shootingStars, dt, skyFade); }
   };
 }
 
@@ -160,7 +171,7 @@ function makeGalaxyTexture() {
   return tex;
 }
 
-function makeGalaxies(sky) {
+function makeGalaxies(sky, skyScale = 1) {
   const tex = makeGalaxyTexture();
   const colors = [0xffe6c2, 0xbcd6ff, 0xffd0e8, 0xd8ffea];
   for (let i = 0; i < 4; i++) {
@@ -168,10 +179,10 @@ function makeGalaxies(sky) {
       map: tex, color: colors[i], transparent: true, opacity: 0.4 + Math.random() * 0.22,
       blending: THREE.AdditiveBlending, depthWrite: false, rotation: Math.random() * Math.PI * 2
     }));
-    const r = 3450;
+    const r = 3450 * skyScale;
     const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
     spr.position.set(r * Math.sin(ph) * Math.cos(th), r * Math.sin(ph) * Math.sin(th) * 0.5, r * Math.cos(ph));
-    const s = 480 + Math.random() * 380;
+    const s = (480 + Math.random() * 380) * skyScale;
     spr.scale.set(s, s, 1);
     sky.add(spr);
   }
@@ -180,7 +191,7 @@ function makeGalaxies(sky) {
 // Estrellas fugaces: destellos breves y rápidos (a diferencia de los cometas,
 // lentos y en órbita) para que el cielo nunca se sienta del todo quieto. El
 // bloom del compositor ya existente hace que incluso una línea fina brille.
-function makeShootingStars(sky) {
+function makeShootingStars(sky, skyScale = 1) {
   const POOL = 5;
   const stars = [];
   for (let i = 0; i < POOL; i++) {
@@ -194,18 +205,20 @@ function makeShootingStars(sky) {
     sky.add(line);
     stars.push({ line, timer: Math.random() * 4, active: false, t: 0, start: new THREE.Vector3(), end: new THREE.Vector3() });
   }
+  stars.skyScale = skyScale;
   return stars;
 }
 
-function updateShootingStars(list, dt) {
+function updateShootingStars(list, dt, skyFade = 0) {
+  const skyScale = list.skyScale || 1;
   for (const s of list) {
     if (!s.active) {
       s.timer -= dt;
       if (s.timer > 0) continue;
-      const r = 2500;
+      const r = 2500 * skyScale;
       const th = Math.random() * Math.PI * 2, ph = Math.acos(Math.random() * 1.1 - 0.55);
       const travel = Math.random() * Math.PI * 2;
-      const len = 130 + Math.random() * 200;
+      const len = (130 + Math.random() * 200) * skyScale;
       s.start.set(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph), r * Math.sin(ph) * Math.sin(th));
       s.end.copy(s.start).add(new THREE.Vector3(Math.cos(travel) * len, (Math.random() - 0.5) * len * 0.5, Math.sin(travel) * len));
       s.active = true;
@@ -230,7 +243,7 @@ function updateShootingStars(list, dt) {
     pos.setXYZ(0, tmpTail.x, tmpTail.y, tmpTail.z);
     pos.setXYZ(1, tmpHead.x, tmpHead.y, tmpHead.z);
     pos.needsUpdate = true;
-    s.line.material.opacity = Math.sin(Math.min(1, k * 3) * Math.PI * 0.5) * (1 - Math.max(0, k - 0.7) / 0.3);
+    s.line.material.opacity = Math.sin(Math.min(1, k * 3) * Math.PI * 0.5) * (1 - Math.max(0, k - 0.7) / 0.3) * (1 - skyFade);
   }
 }
 
@@ -244,10 +257,10 @@ const CONSTELLATION_SHAPES = {
   Cisne: [[[0,2],[0,0]],[[0,0],[0,-2]],[[-1.6,0],[0,0]],[[0,0],[1.6,0]]]
 };
 
-function makeConstellations() {
+function makeConstellations(skyScale = 1) {
   const group = new THREE.Group();
-  const R = 3400;
-  const scale = 90;
+  const R = 3400 * skyScale;
+  const scale = 90 * skyScale;
   const lineMat = new THREE.LineBasicMaterial({ color: 0xcfe8ff, transparent:true, opacity:0.24, blending:THREE.AdditiveBlending, depthWrite:false });
   const starTex = makeDotTexture();
   const names = Object.keys(CONSTELLATION_SHAPES);
@@ -270,14 +283,14 @@ function makeConstellations() {
     group.add(new THREE.LineSegments(geo, lineMat));
 
     const uniquePts = [];
-    for (const p of pts) if (!uniquePts.some(q => q.distanceToSquared(p) < 1)) uniquePts.push(p);
+    for (const p of pts) if (!uniquePts.some(q => q.distanceToSquared(p) < skyScale*skyScale)) uniquePts.push(p);
     for (const p of uniquePts) {
       const star = new THREE.Sprite(new THREE.SpriteMaterial({
         map: starTex, color: 0xeaf6ff, transparent:true, opacity:0.8 + Math.random()*0.15,
         blending: THREE.AdditiveBlending, depthWrite:false
       }));
       star.position.copy(p);
-      const s = 13 + Math.random()*11;
+      const s = (13 + Math.random()*11) * skyScale;
       star.scale.set(s, s, 1);
       group.add(star);
     }

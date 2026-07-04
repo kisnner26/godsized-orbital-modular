@@ -124,7 +124,7 @@ export class GamepadController {
       k.KeyS = ly > 0;
       k.KeyW = ly < 0;
       k.ShiftLeft = this.pressed(gp, 4);                     // L1 (correr)
-      k.Space = this.edge(gp, 0);                            // X (saltar)
+      k.Space = this.pressed(gp, 0);                         // X (saltar / mantener = mochila)
 
       const rx = axis(gp.axes[2] || 0);
       const ry = axis(gp.axes[3] || 0);
@@ -133,7 +133,11 @@ export class GamepadController {
 
       if (this.edge(gp, 3)) this.actions.interact?.();       // Triángulo (subir a la nave)
       if (this.edge(gp, 2)) this.actions.toggleView?.();     // Cuadrado (1ª / 3ª persona)
-      this.input.thrustFwd = 0;
+      if (this.edge(gp, 6)) this.actions.scan?.();           // L2 (escáner de pulso)
+      if (this.edge(gp, 1)) this.actions.recharge?.();       // Círculo (recargar traje)
+      // R2 analógico = láser de minado (mantener), leído como thrustFwd.
+      const r2 = gp.buttons[7] ? (gp.buttons[7].value ?? (gp.buttons[7].pressed ? 1 : 0)) : 0;
+      this.input.thrustFwd = r2;
       this.input.thrustRev = 0;
     } else {
       // En observación (u otros modos) no se pilota: liberamos las teclas.
