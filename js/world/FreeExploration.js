@@ -1,30 +1,142 @@
 import * as THREE from 'three';
-import { ProceduralPlanet } from './ProceduralPlanet.js?v=cullfix1';
+import { ProceduralPlanet } from './ProceduralPlanet.js';
+import { PlanetSurface } from './PlanetSurface.js';
 
 const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();
 const tmp3 = new THREE.Vector3();
 
-const AU_UNITS = 72;
+// ---- Escala "god-sized" (estilo No Man's Sky) --------------------------------
+// WORLD_SCALE multiplica UNIFORMEMENTE radios de planeta, separación orbital
+// (AU_UNITS), radios de estrella y orígenes de sistema. Como todo escala junto,
+// las PROPORCIONES se conservan intactas — pero la nave (fija ~7,4 u) y el
+// astronauta (ojos a 0,34 u, NO escalan) quedan diminutos frente a planetas de
+// decenas de unidades: el horizonte se curva menos, el descenso es más largo y
+// los mundos imponen. Todo lo derivado del radio (atmósfera, aterrizaje, fog,
+// metros/unidad de la telemetría) se reescala solo. El modo Sistema Solar usa su
+// propia escala (VISUAL_AU) y NO se ve afectado.
+const WORLD_SCALE = 2.6;
+const AU_UNITS = 72 * WORLD_SCALE;
 const EARTH_RADIUS_KM = 6371;
 
-const PALETTES = {
-  basalt: [0x4d4f52, 0x24282d, 0x9a8c7b],
-  desert: [0xb66b3d, 0x6a3420, 0xe0b06e],
-  ocean: [0x0b356d, 0x116050, 0x93cfff],
-  ice: [0x9ed8e8, 0x426a7c, 0xf2fbff],
-  ember: [0x7b2d22, 0x301014, 0xf0995a]
+// ---- Clases de bioma (estilo No Man's Sky): cada planeta rocoso pertenece a
+// una y eso define paleta, agua, nubes, flora, fauna, peligro ambiental,
+// clima y qué cristal mineral abunda en su superficie. ----
+const BIOME_KINDS = {
+  exuberante: {
+    label: 'EXUBERANTE',
+    palette: [0x2e6b34, 0x1c3a24, 0x8fb86a],
+    atmoTint: 0x63b8ff,
+    water: -0.055, waterColor: 0x0d4d7a, clouds: 0.7,
+    floraDensity: 1.0, fauna: true,
+    hazardLevel: 0, hazardKind: '',
+    crystal: { res: 'sodio', color: 0xffd85e },
+    weather: ['CLIMA TEMPLADO', 'LLUVIAS SUAVES', 'BRISAS CÁLIDAS'],
+    floraColor: 0x3f9a4e, canopyColor: 0x2f8a44, trunkColor: 0x5a4632, rockColor: 0x7d8188
+  },
+  oceanico: {
+    label: 'OCEÁNICO',
+    palette: [0x0b356d, 0x116050, 0x93cfff],
+    atmoTint: 0x63b8ff,
+    water: -0.02, waterColor: 0x0a3f6e, clouds: 0.85,
+    floraDensity: 0.7, fauna: true,
+    hazardLevel: 0, hazardKind: '',
+    crystal: { res: 'sodio', color: 0xffd85e },
+    weather: ['TORMENTAS MARINAS', 'HUMEDAD ALTA', 'NIEBLA COSTERA'],
+    floraColor: 0x2f9a6e, canopyColor: 0x2a8a60, trunkColor: 0x4a5a42, rockColor: 0x6d7a82
+  },
+  arido: {
+    label: 'ÁRIDO',
+    palette: [0xb66b3d, 0x6a3420, 0xe0b06e],
+    atmoTint: 0xffbc65,
+    water: null, waterColor: 0, clouds: 0.15,
+    floraDensity: 0.25, fauna: true,
+    hazardLevel: 0.35, hazardKind: 'CALOR DESECANTE',
+    crystal: { res: 'sodio', color: 0xffd85e },
+    weather: ['VIENTOS ABRASIVOS', 'SEQUÍA PERPETUA', 'TORMENTAS DE ARENA'],
+    floraColor: 0x8a9a3e, canopyColor: 0x7a8a34, trunkColor: 0x6a4a2a, rockColor: 0xa07850
+  },
+  helado: {
+    label: 'HELADO',
+    palette: [0x9ed8e8, 0x426a7c, 0xf2fbff],
+    atmoTint: 0xaadfff,
+    water: null, waterColor: 0, clouds: 0.5,
+    floraDensity: 0.18, fauna: false,
+    hazardLevel: 0.55, hazardKind: 'FRÍO EXTREMO',
+    crystal: { res: 'dioxita', color: 0xa8ecff },
+    weather: ['VENTISCAS GÉLIDAS', 'NIEVE PERMANENTE', 'HIELO ETERNO'],
+    floraColor: 0x7ac9d8, canopyColor: 0x9adfe8, trunkColor: 0x5a7a86, rockColor: 0x8fb2c2
+  },
+  toxico: {
+    label: 'TÓXICO',
+    palette: [0x5a7a2e, 0x3a2a4e, 0xb8d85e],
+    atmoTint: 0x9aff5e,
+    water: -0.06, waterColor: 0x3a6e2a, clouds: 0.6,
+    floraDensity: 0.8, fauna: true,
+    hazardLevel: 0.6, hazardKind: 'TOXICIDAD ATMOSFÉRICA',
+    crystal: { res: 'amoniaco', color: 0xb6ff5e },
+    weather: ['LLUVIA ÁCIDA', 'NIEBLA VENENOSA', 'ESPORAS FLOTANTES'],
+    floraColor: 0x8ab82e, canopyColor: 0x6a9a3e, trunkColor: 0x4a3a5e, rockColor: 0x6a7a52
+  },
+  abrasador: {
+    label: 'ABRASADOR',
+    palette: [0x7b2d22, 0x301014, 0xf0995a],
+    atmoTint: 0xff8a3a,
+    water: null, waterColor: 0, clouds: 0.2,
+    floraDensity: 0.08, fauna: false,
+    hazardLevel: 0.75, hazardKind: 'CALOR EXTREMO',
+    crystal: { res: 'fosfato', color: 0xffb066 },
+    weather: ['TORMENTAS DE FUEGO', 'CALOR SOFOCANTE', 'CENIZA VOLCÁNICA'],
+    floraColor: 0xb85a2e, canopyColor: 0xa04a28, trunkColor: 0x3a1a12, rockColor: 0x8a4a3a
+  },
+  irradiado: {
+    label: 'IRRADIADO',
+    palette: [0x5a8a4e, 0x2a3a1e, 0xd8ff6e],
+    atmoTint: 0xb8ff4e,
+    water: null, waterColor: 0, clouds: 0.35,
+    floraDensity: 0.3, fauna: false,
+    hazardLevel: 0.7, hazardKind: 'RADIACIÓN EXTREMA',
+    crystal: { res: 'uranio', color: 0x9dff3d },
+    weather: ['TORMENTAS RADIACTIVAS', 'VIENTO IONIZADO', 'LLUVIA CONTAMINADA'],
+    floraColor: 0x8adf3e, canopyColor: 0x6abf3e, trunkColor: 0x3a4a22, rockColor: 0x7a8a5a
+  },
+  muerto: {
+    label: 'MUERTO',
+    palette: [0x4d4f52, 0x24282d, 0x9a8c7b],
+    atmoTint: 0,
+    water: null, waterColor: 0, clouds: 0,
+    floraDensity: 0, fauna: false,
+    hazardLevel: 0.4, hazardKind: 'SIN ATMÓSFERA',
+    crystal: { res: 'cobalto', color: 0x6ea8ff },
+    weather: ['VACÍO SILENCIOSO', 'SIN CLIMA', 'POLVO ESTÁTICO'],
+    floraColor: 0, canopyColor: 0, trunkColor: 0, rockColor: 0x6d6f72
+  }
 };
+
+const BIOME_POOL = ['exuberante', 'oceanico', 'arido', 'helado', 'toxico', 'abrasador', 'irradiado', 'muerto'];
+
+// Nombres procedurales de planetas (estilo NMS: pronunciables + sufijo).
+const P_SYL = ['Ath', 'Bel', 'Cor', 'Dra', 'Eku', 'Fen', 'Gal', 'Hor', 'Ith', 'Kor',
+  'Lum', 'Mar', 'Nov', 'Oxo', 'Pra', 'Quel', 'Rin', 'Sol', 'Ter', 'Uxa', 'Vor', 'Wex', 'Yll', 'Zan'];
+const P_SYL2 = ['ara', 'bos', 'cira', 'dium', 'era', 'fal', 'gon', 'hem', 'ios', 'kar',
+  'lon', 'mira', 'nos', 'oria', 'pex', 'quor', 'ros', 'tania', 'urn', 'via', 'xis', 'yr', 'zul'];
+const P_SUF = ['', '', '', ' Prime', ' Mayor', ' Menor', ' IX', ' V', ' XII', ' Omega'];
+
+function planetName(rnd) {
+  return P_SYL[Math.floor(rnd() * P_SYL.length)]
+    + P_SYL2[Math.floor(rnd() * P_SYL2.length)]
+    + P_SUF[Math.floor(rnd() * P_SUF.length)];
+}
 
 const SOLAR_SYSTEM = {
   name: 'SISTEMA SOL',
-  origin: new THREE.Vector3(0, -26, -260),
+  origin: new THREE.Vector3(0, -26, -260).multiplyScalar(WORLD_SCALE),
   star: { name: 'SOL', radius: 12, color: 0xffb142, halo: 0xff6a1a, safeRadius: 25 },
   bodies: [
-    rocky('Mercurio', 0.39, 2439, 0.38, 0, 'basalt', 0.025),
-    rocky('Venus', 0.72, 6052, 0.91, 0xffbc65, 'desert', 0.045),
-    rocky('Tierra', 1.0, 6371, 1.0, 0x63b8ff, 'ocean', 0.055),
-    rocky('Marte', 1.52, 3390, 0.38, 0xd77a48, 'desert', 0.07),
+    rocky('Mercurio', 0.39, 2439, 0.38, 'muerto', 0.025),
+    rocky('Venus', 0.72, 6052, 0.91, 'abrasador', 0.045),
+    rocky('Tierra', 1.0, 6371, 1.0, 'exuberante', 0.055),
+    rocky('Marte', 1.52, 3390, 0.38, 'arido', 0.07),
     gas('Jupiter', 5.2, 69911, 2.5, 0xd6a070, 0xb16a3e),
     gas('Saturno', 9.58, 58232, 1.07, 0xe4c38d, 0x8d6a42, true),
     gas('Urano', 19.2, 25362, 0.89, 0x9be8e8, 0x5aa6b3, true),
@@ -33,13 +145,14 @@ const SOLAR_SYSTEM = {
 };
 
 const EXTRA_SYSTEMS = [
-  proceduralSystem('KEPLER-186', new THREE.Vector3(-1380, 120, -1360), 12, 0xff7b52, 0xff3344, 9812),
-  proceduralSystem('TRAPPIST-1', new THREE.Vector3(1720, -84, -1680), 10, 0xff624a, 0xff2730, 24191),
-  proceduralSystem('LACAILLE-9352', new THREE.Vector3(980, 210, 1260), 13, 0xffd27a, 0x75a8ff, 6321),
-  proceduralSystem('GLIESE-667 C', new THREE.Vector3(-1820, -160, 1120), 11, 0xff9866, 0xff5b30, 17333)
+  proceduralSystem('KEPLER-186', new THREE.Vector3(-1380, 120, -1360).multiplyScalar(WORLD_SCALE), 12, 0xff7b52, 0xff3344, 9812),
+  proceduralSystem('TRAPPIST-1', new THREE.Vector3(1720, -84, -1680).multiplyScalar(WORLD_SCALE), 10, 0xff624a, 0xff2730, 24191),
+  proceduralSystem('LACAILLE-9352', new THREE.Vector3(980, 210, 1260).multiplyScalar(WORLD_SCALE), 13, 0xffd27a, 0x75a8ff, 6321),
+  proceduralSystem('GLIESE-667 C', new THREE.Vector3(-1820, -160, 1120).multiplyScalar(WORLD_SCALE), 11, 0xff9866, 0xff5b30, 17333)
 ];
 
 const EXPLORATION_SYSTEMS = [SOLAR_SYSTEM, ...EXTRA_SYSTEMS];
+const DISCOVERY_KEY = 'orion7.discoveries';
 
 export class FreeExploration {
   constructor(scene, camera) {
@@ -49,12 +162,18 @@ export class FreeExploration {
     this.systems = [];
     this.planets = [];
     this.bodies = [];
+    // Carga diferida de sistemas: solo el del spawn se construye al entrar; los
+    // demás se materializan al acercarse. originShift acumula el origin-shift
+    // para colocar bien los sistemas construidos tarde.
+    this.pendingSystems = [];
+    this.originShift = new THREE.Vector3();
     this.markers = new THREE.Group();
     this.markers.name = 'EXPLORATION_NAV_MARKERS';
     this.markers.visible = false;
     this.scene.add(this.markers);
     this.activePlanet = null;
-    this.surfaceBody = null;      // cuerpo activo en modo superficie (o null en vuelo libre)
+    this.surfaceBody = null;      // cuerpo con foco atmosférico (o null en vuelo libre)
+    this.surface = null;          // PlanetSurface de props/fauna del cuerpo con foco
     this.surfaceBodyPrevMaxLevel = 4;
     this.metersPerUnit = 1000;
     this.telemetry = {
@@ -63,14 +182,54 @@ export class FreeExploration {
       biome: 'ESPACIO',
       insideAtmosphere: false,
       hazard: 'none',
+      hazardLevel: 0,
+      hazardKind: '',
+      landAltitude: 0,
       world: 'EXPLORACION',
       system: 'SISTEMA SOL'
     };
+
+    // Descubrimientos persistentes (estilo NMS: la primera visita a un mundo
+    // queda registrada y recompensada).
+    try { this.discoveries = JSON.parse(localStorage.getItem(DISCOVERY_KEY) || '{}'); }
+    catch { this.discoveries = {}; }
+
+    this.onEnterAtmosphere = null;  // (body, isNewDiscovery) => void
+    this.onExitAtmosphere = null;   // (body) => void
+
+    // ---- Transición atmosférica seamless (espacio ↔ cielo del planeta) ----
+    // skyFade (0..1): cuánto se funden las estrellas/nebulosas tras el cielo
+    // (main.js lo pasa a SpaceEnvironment.setFade). El fondo de la escena se
+    // interpola de espacio profundo al color del cielo, y un fog lineal
+    // coherente (THREE.Fog para props + uniforms manuales en los shaders de
+    // terreno/agua) crea perspectiva aérea y oculta el popping del LOD.
+    this.skyFade = 0;
+    this.baseBackground = new THREE.Color(0x01040a);
+    this.skyBlendColor = new THREE.Color();
+    this.fog = new THREE.Fog(0x01040a, 1e6, 1e7);
+
+    // Iluminación de superficie: sol direccional + ambiente hemisférico, solo
+    // activos con foco atmosférico (los props/astronauta/nave usan materiales
+    // estándar que necesitan luces reales; el terreno se ilumina en su shader).
+    this.surfaceSun = new THREE.DirectionalLight(0xfff2dd, 0);
+    this.surfaceSun.castShadow = false;
+    this.scene.add(this.surfaceSun);
+    this.scene.add(this.surfaceSun.target);
+    this.surfaceAmbient = new THREE.HemisphereLight(0x8fb8d8, 0x3a3228, 0);
+    this.scene.add(this.surfaceAmbient);
   }
 
   enter(player) {
     if (!this.systems.length) this.build();
     this.enabled = true;
+    // El fog vive SIEMPRE en la escena durante Exploración (con far
+    // astronómico es invisible); así los materiales estándar compilan una
+    // sola vez con soporte de fog y solo animamos color/near/far.
+    if (this.scene.background?.isColor) this.baseBackground.copy(this.scene.background);
+    this.fog.color.copy(this.baseBackground);
+    this.fog.near = 1e6;
+    this.fog.far = 1e7;
+    this.scene.fog = this.fog;
     for (const system of this.systems) system.group.visible = true;
     for (const body of this.bodies) body.group.visible = true;
     this.markers.visible = true;
@@ -94,6 +253,9 @@ export class FreeExploration {
   exit(player) {
     this.enabled = false;
     if (this.surfaceBody) this.exitSurfaceMode();
+    this.scene.fog = null;
+    this.skyFade = 0;
+    if (this.scene.background?.isColor) this.scene.background.copy(this.baseBackground);
     for (const system of this.systems) system.group.visible = false;
     for (const body of this.bodies) body.group.visible = false;
     this.markers.visible = false;
@@ -106,36 +268,111 @@ export class FreeExploration {
     player.coordinateTime = 0;
   }
 
-  // Al entrar a la superficie de un planeta se oculta TODO lo demás (otros
-  // sistemas, otros planetas, las balizas de navegación): solo queda activo
-  // ese planeta, que además puede permitirse mucho más nivel de detalle al
-  // ser el único cuerpo procedural cargándose. Así no se acumulan en memoria
-  // ni GPU los demás sistemas mientras se explora a pie.
+  // Foco atmosférico: al cruzar la atmósfera de un planeta rocoso se oculta
+  // TODO lo demás (otros sistemas, balizas) y ese planeta sube de nivel de
+  // detalle y materializa su superficie viva (flora/minerales/fauna). Es la
+  // transición espacio→planeta sin cortes: el resto del universo se congela
+  // hasta volver a despegar.
   enterSurfaceMode(body) {
-    if (!body || body.kind !== 'rocky' || this.surfaceBody) return;
+    if (!body || body.kind !== 'rocky' || this.surfaceBody) return false;
     this.surfaceBody = body;
     for (const system of this.systems) system.group.visible = false;
     for (const b of this.bodies) b.group.visible = (b === body);
     this.markers.visible = false;
     this.surfaceBodyPrevMaxLevel = body.planet.maxLevel;
-    body.planet.maxLevel = Math.max(body.planet.maxLevel, 7);
+    // Planetas más grandes (WORLD_SCALE) necesitan un nivel más de subdivisión
+    // para que el triángulo a ras de suelo siga midiendo decímetros.
+    body.planet.maxLevel = Math.max(body.planet.maxLevel, 8);
+    if (body.profile) {
+      this.surface = new PlanetSurface(body.planet, body.profile, body.seed);
+      this.surfaceAmbient.color.set(body.profile.atmoTint || 0x8fb8d8);
+      this.surfaceAmbient.groundColor.set(body.profile.palette[1]);
+      this.surfaceAmbient.intensity = body.profile.atmoTint ? 0.85 : 0.45;
+      this.surfaceSun.intensity = 1.6;
+    }
+
+    // Registro de descubrimiento (persistente) la primera vez.
+    const key = `${body.system}/${body.name}`;
+    const isNew = !this.discoveries[key];
+    if (isNew) {
+      this.discoveries[key] = Date.now();
+      try { localStorage.setItem(DISCOVERY_KEY, JSON.stringify(this.discoveries)); } catch { /* sin persistencia */ }
+    }
+    this.onEnterAtmosphere?.(body, isNew);
+    return true;
   }
 
-  // Al volver a despegar se restauran los demás sistemas/planetas (vuelven
-  // a construirse las texturas/chunks bajo demanda según la cámara se
-  // acerque, igual que la primera vez) y el detalle del planeta vuelto a
-  // su nivel normal para no penalizar el resto del vuelo.
+  // Al salir de la atmósfera se restauran los demás sistemas/planetas (se
+  // reconstruyen texturas/chunks bajo demanda igual que la primera vez), la
+  // superficie viva se libera por completo y el detalle vuelve a su nivel
+  // normal para no penalizar el vuelo interplanetario.
   exitSurfaceMode() {
     if (!this.surfaceBody) return;
+    const body = this.surfaceBody;
     for (const system of this.systems) system.group.visible = true;
     for (const b of this.bodies) b.group.visible = true;
     this.markers.visible = true;
-    this.surfaceBody.planet.maxLevel = this.surfaceBodyPrevMaxLevel;
+    body.planet.maxLevel = this.surfaceBodyPrevMaxLevel;
+    if (this.surface) { this.surface.dispose(); this.surface = null; }
+    this.surfaceSun.intensity = 0;
+    this.surfaceAmbient.intensity = 0;
     this.surfaceBody = null;
+    // De vuelta al espacio: cielo profundo pleno y fog apagado. En el borde
+    // de la atmósfera la densidad ya es ~0, así que no hay salto visible.
+    body.planet.clearFog();
+    this.skyFade = 0;
+    if (this.scene.background?.isColor) this.scene.background.copy(this.baseBackground);
+    this.fog.color.copy(this.baseBackground);
+    this.fog.near = 1e6;
+    this.fog.far = 1e7;
+    this.onExitAtmosphere?.(body);
+  }
+
+  isDiscovered(body) {
+    return !!this.discoveries[`${body.system}/${body.name}`];
   }
 
   build() {
-    for (const spec of EXPLORATION_SYSTEMS) this.buildSystem(spec);
+    // Solo el sistema del spawn (SOLAR, que contiene la Tierra para getSafeSpawn)
+    // se construye al entrar. Los demás quedan pendientes y se materializan al
+    // aproximarse — así entrar a Exploración es mucho más rápido.
+    this.buildSystem(SOLAR_SYSTEM);
+    this.pendingSystems = [...EXTRA_SYSTEMS];
+  }
+
+  // Construye un sistema pendiente cuando el jugador se acerca, colocándolo en
+  // coordenadas ya desplazadas si hubo origin-shift, y lo deja visible.
+  buildPendingSystems(playerPos) {
+    if (!this.pendingSystems.length || this.surfaceBody) return;
+    // Umbral entre el radio de un sistema (~1500 u, para construirlo ANTES de
+    // alcanzar sus planetas) y la separación entre sistemas (~4600 u, para NO
+    // construirlos todos en el spawn). En unidades de mundo ya escaladas.
+    const BUILD_RANGE = 2500;
+    for (let i = this.pendingSystems.length - 1; i >= 0; i--) {
+      const spec = this.pendingSystems[i];
+      tmp.copy(spec.origin).sub(this.originShift);
+      if (tmp.distanceToSquared(playerPos) > BUILD_RANGE * BUILD_RANGE) continue;
+      this.pendingSystems.splice(i, 1);
+      const bodyStart = this.bodies.length;
+      const markerStart = this.markers.children.length;
+      this.buildSystem(spec);
+      const sys = this.systems[this.systems.length - 1];
+      // Reposiciona el sistema recién creado según el origin-shift acumulado.
+      if (this.originShift.lengthSq() > 1e-6) {
+        sys.group.position.sub(this.originShift);
+        for (let j = bodyStart; j < this.bodies.length; j++) {
+          const b = this.bodies[j];
+          if (b.kind === 'rocky') b.planet.shiftOrigin(this.originShift);
+          else if (b.kind === 'gas') b.group.position.sub(this.originShift);
+        }
+        for (let j = markerStart; j < this.markers.children.length; j++) {
+          this.markers.children[j].position.sub(this.originShift);
+        }
+      }
+      // Coincide con el estado de visibilidad de vuelo libre (todo visible).
+      sys.group.visible = true;
+      for (let j = bodyStart; j < this.bodies.length; j++) this.bodies[j].group.visible = true;
+    }
   }
 
   buildSystem(spec) {
@@ -186,10 +423,15 @@ export class FreeExploration {
   }
 
   createStar(starSpec, systemSpec) {
+    // La estrella escala con el resto del universo (WORLD_SCALE) para conservar
+    // las proporciones: el Sol sigue siendo pequeño frente a la órbita de la
+    // Tierra, pero todo es más grande en unidades de mundo.
+    const starRadius = starSpec.radius * WORLD_SCALE;
+    const safeRadius = starSpec.safeRadius * WORLD_SCALE;
     const group = new THREE.Group();
     group.name = `STAR_${starSpec.name}`;
     const core = new THREE.Mesh(
-      new THREE.SphereGeometry(starSpec.radius, 96, 64),
+      new THREE.SphereGeometry(starRadius, 96, 64),
       new THREE.MeshBasicMaterial({ color: starSpec.color, toneMapped: false })
     );
     group.add(core);
@@ -204,18 +446,20 @@ export class FreeExploration {
         blending: THREE.AdditiveBlending,
         depthWrite: false
       }));
-      sprite.scale.set(starSpec.radius * scale, starSpec.radius * scale, 1);
+      sprite.scale.set(starRadius * scale, starRadius * scale, 1);
       group.add(sprite);
     }
-    group.add(new THREE.PointLight(starSpec.color, 18, 2400, 1.05));
+    // Alcance de la luz escalado para que siga iluminando los planetas, ahora
+    // más lejos por AU_UNITS mayor.
+    group.add(new THREE.PointLight(starSpec.color, 18, 2400 * WORLD_SCALE, 1.05));
 
     return {
       kind: 'star',
       name: starSpec.name,
       system: systemSpec.name,
       group,
-      radius: starSpec.radius,
-      atmosphereRadius: starSpec.safeRadius,
+      radius: starRadius,
+      atmosphereRadius: safeRadius,
       metersPerUnit: 25000000,
       hazard: 'star',
       sample: makeSample()
@@ -225,7 +469,11 @@ export class FreeExploration {
   createRockyPlanet(spec, position, systemSpec) {
     const radius = displayRadiusFromKm(spec.radiusKm);
     const terrainAmplitude = Math.max(0.55, radius * spec.relief);
-    const atmosphereRadius = radius + Math.max(3.6, radius * (spec.atmosphere ? 0.32 : 0.14));
+    const profile = BIOME_KINDS[spec.biomeKind] || BIOME_KINDS.muerto;
+    const hasAtmo = spec.biomeKind !== 'muerto';
+    const atmosphereRadius = radius + Math.max(3.6, radius * (hasAtmo ? 0.32 : 0.14));
+    const seed = hashString(`${systemSpec.name}/${spec.name}`);
+    const rnd = seededRandom(seed);
     const planet = new ProceduralPlanet(this.scene, this.camera, {
       position,
       radius,
@@ -233,12 +481,22 @@ export class FreeExploration {
       atmosphereRadius,
       metersPerUnit: (spec.radiusKm * 1000) / radius,
       patchResolution: 8,
-      maxLevel: 4
+      maxLevel: 4,
+      noiseOffset: new THREE.Vector3(rnd() * 8, rnd() * 8, rnd() * 8),
+      waterLevel: profile.water,
+      waterColor: profile.waterColor,
+      cloudiness: profile.clouds
     });
     planet.name = spec.name;
     planet.group.name = `EXPLORABLE_ROCKY_${spec.name}`;
     planet.group.visible = false;
-    tintProceduralPlanet(planet, PALETTES[spec.palette] || PALETTES.basalt, spec.atmosphere);
+    tintProceduralPlanet(planet, profile.palette, hasAtmo ? profile.atmoTint : 0);
+    if (!hasAtmo) planet.atmosphere.visible = false;
+
+    // Recursos que el escáner/tarjeta del planeta anuncia (y que de verdad
+    // aparecen en superficie a través de PlanetSurface).
+    const resources = ['ferrita', 'cobalto', profile.crystal.res];
+    if (profile.floraDensity > 0) resources.unshift('carbono', 'oxigeno');
 
     return {
       kind: 'rocky',
@@ -246,6 +504,14 @@ export class FreeExploration {
       system: systemSpec.name,
       group: planet.group,
       planet,
+      profile,
+      seed,
+      biomeLabel: profile.label,
+      weather: profile.weather[Math.floor(rnd() * profile.weather.length)],
+      hazardLevel: profile.hazardLevel,
+      hazardKind: profile.hazardKind,
+      fauna: profile.fauna,
+      resources,
       radius,
       atmosphereRadius,
       gravity: spec.gravity,
@@ -257,7 +523,7 @@ export class FreeExploration {
   }
 
   createGasGiant(spec, position, systemSpec) {
-    const radius = Math.max(30, Math.sqrt(spec.radiusKm / EARTH_RADIUS_KM) * 17);
+    const radius = Math.max(30, Math.sqrt(spec.radiusKm / EARTH_RADIUS_KM) * 17) * WORLD_SCALE;
     const atmosphereRadius = radius * 2.15;
     const group = new THREE.Group();
     group.name = `EXPLORABLE_GAS_${spec.name}`;
@@ -371,22 +637,63 @@ export class FreeExploration {
 
   update(dt, player) {
     if (!this.enabled) return;
+
+    // Transición espacio↔planeta sin cortes, con histéresis para no parpadear
+    // justo en el borde de la atmósfera.
+    const playerPos = player.rig.position;
+    if (this.surfaceBody) {
+      this.surfaceBody.group.getWorldPosition(tmp);
+      const d = tmp.distanceTo(playerPos);
+      if (d > this.surfaceBody.atmosphereRadius * 1.08 && player.mode === 'flight') {
+        this.exitSurfaceMode();
+      }
+    } else {
+      const near = this.findNearestBody(playerPos);
+      if (near && near.kind === 'rocky') {
+        near.group.getWorldPosition(tmp);
+        if (tmp.distanceTo(playerPos) < near.atmosphereRadius) this.enterSurfaceMode(near);
+      }
+    }
+
     if (this.surfaceBody) {
       // Modo superficie: solo se actualiza (CPU de LOD + GPU de render) el
-      // planeta activo. El resto del universo queda congelado hasta salir.
-      this.surfaceBody.planet.update(dt);
-      this.activePlanet = this.surfaceBody;
-      this.getTelemetryFor(player.rig.position);
+      // planeta activo y su capa de vida. El resto del universo queda
+      // congelado hasta salir.
+      const body = this.surfaceBody;
+      body.planet.update(dt);
+      this.updateSunFor(body);
+      if (this.surface) this.surface.update(dt, playerPos);
+
+      // El sol direccional de superficie sigue al jugador desde la dirección
+      // real de la estrella (día/noche según dónde estés del planeta).
+      this.surfaceSun.position.copy(playerPos).addScaledVector(body.planet.sunDirection, 180);
+      this.surfaceSun.target.position.copy(playerPos);
+
+      this.activePlanet = body;
+      this.getTelemetryFor(playerPos);
+      this.updateAtmosphereBlend(body, playerPos);
       return;
     }
+
+    // Materializa sistemas lejanos al acercarse (carga diferida).
+    this.buildPendingSystems(playerPos);
+
     let nearest = null;
     let nearestScore = Infinity;
     for (const body of this.bodies) {
-      if (body.kind === 'rocky') body.planet.update(dt);
+      body.group.getWorldPosition(tmp);
+      const score = tmp2.copy(playerPos).sub(tmp).lengthSq();
+      if (body.kind === 'rocky') {
+        this.updateSunFor(body);
+        // Culling por distancia del LOD: solo recorrer el quadtree del planeta
+        // si el jugador está razonablemente cerca. Los planetas lejanos son
+        // puntos: no hace falta subdividir su terreno cada frame (gran ahorro
+        // de CPU en vuelo interplanetario con muchos cuerpos god-sized).
+        const lodRange = body.atmosphereRadius * 6;
+        if (score < lodRange * lodRange) body.planet.update(dt);
+      }
       if (body.kind === 'gas') body.group.rotation.y += dt * 0.035;
       if (body.kind === 'star') body.group.rotation.y += dt * 0.02;
-      body.group.getWorldPosition(tmp);
-      const score = tmp2.copy(player.rig.position).sub(tmp).lengthSq();
       if (score < nearestScore) {
         nearestScore = score;
         nearest = body;
@@ -394,7 +701,62 @@ export class FreeExploration {
     }
     this.activePlanet = nearest;
     this.updateMarkers(dt, player);
-    this.getTelemetryFor(player.rig.position);
+    this.getTelemetryFor(playerPos);
+  }
+
+  // Mezcla atmosférica continua durante el descenso (estilo NMS): a medida
+  // que se baja, el fondo estelar se convierte en cielo del color del planeta
+  // (modulado por si es de día o de noche en ese punto), el fog se cierra
+  // creando perspectiva aérea que oculta el popping del LOD, y las estrellas
+  // se funden (skyFade → SpaceEnvironment). Todo es función suave de la
+  // altitud: en el borde de la atmósfera el efecto es exactamente 0.
+  updateAtmosphereBlend(body, playerPos) {
+    const profile = body.profile;
+    if (!profile || !profile.atmoTint) {
+      // Mundos sin atmósfera: espacio pleno hasta el suelo (como la Luna).
+      this.skyFade = 0;
+      return;
+    }
+    const thick = Math.max(0.001, body.atmosphereRadius - body.radius);
+    const density = THREE.MathUtils.clamp(1 - this.telemetry.altitudeUnits / thick, 0, 1);
+    body.group.getWorldPosition(tmp);
+    tmp2.copy(playerPos).sub(tmp).normalize();
+    const sunFacing = THREE.MathUtils.smoothstep(tmp2.dot(body.planet.sunDirection), -0.12, 0.42);
+
+    // Cielo: tinte atmosférico del bioma, oscurecido de noche.
+    const dayness = Math.pow(density, 1.25) * (0.16 + 0.84 * sunFacing);
+    this.skyBlendColor.set(profile.atmoTint).multiplyScalar(0.20 + 0.80 * sunFacing);
+    if (this.scene.background?.isColor) {
+      this.scene.background.copy(this.baseBackground).lerp(this.skyBlendColor, dayness);
+    }
+
+    // Fog: se cierra al descender. Escalado al RADIO del planeta (el
+    // horizonte a pie está a ~sqrt(2·R·h), unas pocas unidades): a ras de
+    // suelo far≈1.6·R cubre justo el rango donde el LOD hace pop (0.6·R a
+    // 2·R), y en el borde de la atmósfera queda prácticamente abierto.
+    // Mismo near/far para THREE.Fog (props, nave) y para los shaders de
+    // terreno/agua → fusión idéntica de todas las capas.
+    const closeness = Math.pow(density, 0.7);
+    const far = body.radius * THREE.MathUtils.lerp(12, 1.5, closeness);
+    const near = far * 0.2;
+    this.fog.color.copy(this.scene.background?.isColor ? this.scene.background : this.skyBlendColor);
+    this.fog.near = near;
+    this.fog.far = far;
+    body.planet.setFog(this.fog.color, near, far);
+
+    // Las estrellas desaparecen tras el cielo diurno; de noche persisten.
+    this.skyFade = density * (0.12 + 0.88 * sunFacing);
+  }
+
+  // Dirección del sol del planeta = hacia la estrella REAL de su sistema.
+  // Ilumina superficie, atmósfera, agua y nubes de forma coherente: aterrizar
+  // en la cara opuesta a la estrella es aterrizar de noche.
+  updateSunFor(body) {
+    const system = this.systems.find(s => s.name === body.system);
+    if (!system) return;
+    system.star.group.getWorldPosition(tmp3);
+    body.group.getWorldPosition(tmp2);
+    body.planet.sunDirection.copy(tmp3.sub(tmp2).normalize());
   }
 
   updateMarkers(dt, player) {
@@ -416,7 +778,14 @@ export class FreeExploration {
       const sample = body.planet.sampleTerrain(worldPosition);
       sample.kind = 'rocky';
       sample.hazard = 'solid';
-      sample.hazardLevel = sample.insideAtmosphere ? 0.12 : 0;
+      // El peligro ambiental del planeta (frío/calor/toxicidad/radiación) solo
+      // afecta dentro de su atmósfera; el exotraje lo drena a pie.
+      sample.hazardLevel = sample.insideAtmosphere ? body.hazardLevel : 0;
+      sample.hazardKind = body.hazardKind;
+      sample.atmoDepth = sample.insideAtmosphere
+        ? THREE.MathUtils.clamp(1 - sample.altitudeUnits / (body.atmosphereRadius - body.radius), 0, 1)
+        : 0;
+      sample.landAltitude = Math.max(2.5, body.radius * 0.12);
       sample.gravity = body.gravity;
       sample.world = body.name;
       sample.system = body.system;
@@ -449,6 +818,7 @@ export class FreeExploration {
     sample.kind = 'gas';
     sample.hazard = 'gas';
     sample.hazardLevel = pressureDepth;
+    sample.hazardKind = 'PRESIÓN ATMOSFÉRICA';
     sample.fatal = distance < body.collapseRadius;
     sample.gravity = body.gravity;
     sample.world = body.name;
@@ -474,6 +844,7 @@ export class FreeExploration {
     sample.kind = 'star';
     sample.hazard = 'star';
     sample.hazardLevel = heat;
+    sample.hazardKind = 'CALOR ESTELAR';
     sample.fatal = distance < body.radius * 1.08;
     sample.gravity = 28;
     sample.world = body.name;
@@ -491,6 +862,8 @@ export class FreeExploration {
         biome: 'ESPACIO',
         insideAtmosphere: false,
         hazard: 'none',
+        hazardLevel: 0,
+        hazardKind: '',
         world: 'ESPACIO',
         system: 'RUTA PROFUNDA'
       });
@@ -506,6 +879,8 @@ export class FreeExploration {
     this.telemetry.insideAtmosphere = sample.insideAtmosphere;
     this.telemetry.hazard = sample.hazard || 'none';
     this.telemetry.hazardLevel = sample.hazardLevel || 0;
+    this.telemetry.hazardKind = sample.hazardKind || '';
+    this.telemetry.landAltitude = sample.landAltitude || 0;
     this.telemetry.world = sample.world || 'MUNDO';
     this.telemetry.system = sample.system || 'SISTEMA';
     return this.telemetry;
@@ -538,30 +913,49 @@ export class FreeExploration {
 
   getSafeSpawn() {
     const earth = this.bodies.find(b => b.name === 'Tierra');
-    if (!earth) return new THREE.Vector3(72, 18, -205);
-    return this.getBodyCenter(earth, new THREE.Vector3()).add(new THREE.Vector3(0, earth.atmosphereRadius + 34, 38));
+    if (!earth) return new THREE.Vector3(72, 18, -205).multiplyScalar(WORLD_SCALE);
+    // Aparece BIEN por encima de la atmósfera (margen relativo al radio, no un
+    // offset fijo minúsculo frente a un planeta god-sized) y ligeramente al lado
+    // para ver el mundo entero al arrancar.
+    const margin = earth.radius * 0.5 + 20;
+    return this.getBodyCenter(earth, new THREE.Vector3())
+      .add(new THREE.Vector3(0, earth.atmosphereRadius + margin, earth.radius * 0.6));
   }
 
   getSafeSpawnNear(sample) {
     if (!sample?.center || !sample?.normal) return this.getSafeSpawn();
-    const lift = Math.max(80, (sample.surfaceRadius || 20) + 65);
+    // Elevación relativa al radio para quedar SIEMPRE fuera de la atmósfera,
+    // sea el cuerpo pequeño o god-sized.
+    const r = sample.surfaceRadius || 20;
+    const lift = Math.max(80, r * 1.45 + 24);
     return sample.center.clone().addScaledVector(sample.normal, lift);
   }
 
   shiftOrigin(offset) {
+    // Acumula el desplazamiento para colocar bien los sistemas que aún no se
+    // han construido (carga diferida) cuando se materialicen más tarde.
+    this.originShift.add(offset);
     for (const system of this.systems) system.group.position.sub(offset);
     for (const body of this.bodies) {
       if (body.kind === 'rocky') body.planet.shiftOrigin(offset);
       else if (body.kind === 'gas') body.group.position.sub(offset);
     }
     for (const marker of this.markers.children) marker.position.sub(offset);
+    this.surfaceSun.position.sub(offset);
+    this.surfaceSun.target.position.sub(offset);
   }
 
   setMaxLevel(level) {
     for (const planet of this.planets) planet.maxLevel = Math.max(1, level | 0);
+    // Con foco atmosférico el planeta activo mantiene su detalle alto.
+    if (this.surfaceBody) {
+      this.surfaceBodyPrevMaxLevel = Math.max(1, level | 0);
+      this.surfaceBody.planet.maxLevel = Math.max(level | 0, 8);
+    }
   }
 
   dispose() {
+    if (this.surface) { this.surface.dispose(); this.surface = null; }
     for (const planet of this.planets) planet.dispose();
     for (const system of this.systems) this.scene.remove(system.group);
     this.scene.remove(this.markers);
@@ -571,19 +965,19 @@ export class FreeExploration {
   }
 }
 
-function rocky(name, orbitAu, radiusKm, gravity, atmosphere, palette, relief) {
+function rocky(name, orbitAu, radiusKm, gravity, biomeKind, relief) {
+  const profile = BIOME_KINDS[biomeKind] || BIOME_KINDS.muerto;
   return {
     kind: 'rocky',
     name,
     orbitAu,
     radiusKm,
     gravity,
-    atmosphere,
-    palette,
+    biomeKind,
     relief,
     phase: seededPhase(name),
     inclination: (seededPhase(`${name}-i`) - Math.PI) * 2.2,
-    tint: atmosphere || 0x9affde
+    tint: profile.atmoTint || 0x9affde
   };
 }
 
@@ -620,14 +1014,13 @@ function proceduralSystem(name, origin, starRadius, starColor, haloColor, seed) 
         rnd() > 0.58
       ));
     } else {
-      const palette = ['basalt', 'desert', 'ocean', 'ice', 'ember'][Math.floor(rnd() * 5)];
+      const biomeKind = BIOME_POOL[Math.floor(rnd() * BIOME_POOL.length)];
       bodies.push(rocky(
-        `${name}-${roman(i + 1)}`,
+        planetName(rnd),
         orbitAu,
         2600 + rnd() * 7600,
         0.2 + rnd() * 1.35,
-        rnd() > 0.42 ? randomColor(rnd, [0.48, 0.62], [0.45, 0.75], [0.55, 0.72]) : 0,
-        palette,
+        biomeKind,
         0.035 + rnd() * 0.06
       ));
     }
@@ -643,11 +1036,11 @@ function proceduralSystem(name, origin, starRadius, starColor, haloColor, seed) 
 }
 
 function displayRadiusFromKm(radiusKm) {
-  // Antes (4.2..6.4) la nave (7.4 de largo) era casi tan grande como el
-  // propio radio del planeta. Los planetas rocosos ahora son mucho más
-  // grandes que la nave, sin tocar la escala de la nave en sí (que también
-  // se usa en modo Sistema Solar) ni las distancias orbitales (AU_UNITS).
-  return Math.max(15, Math.cbrt(radiusKm / EARTH_RADIUS_KM) * 21);
+  // Raíz cúbica: comprime el rango de tamaños reales. WORLD_SCALE agranda el
+  // resultado para el efecto "god-sized" (Tierra ≈ 21·2.6 ≈ 55 u frente a la
+  // nave de 7,4 u). La telemetría en metros se mantiene real porque
+  // metersPerUnit deriva de este radio.
+  return Math.max(15, Math.cbrt(radiusKm / EARTH_RADIUS_KM) * 21) * WORLD_SCALE;
 }
 
 function tintProceduralPlanet(planet, palette, atmosphereColor) {
@@ -669,6 +1062,7 @@ function makeSample() {
     insideAtmosphere: false,
     hazard: 'none',
     hazardLevel: 0,
+    hazardKind: '',
     fatal: false,
     world: 'MUNDO',
     system: 'SISTEMA',
@@ -687,6 +1081,7 @@ function emptySample(worldPosition) {
     insideAtmosphere: false,
     hazard: 'none',
     hazardLevel: 0,
+    hazardKind: '',
     fatal: false,
     world: 'ESPACIO',
     system: 'RUTA PROFUNDA',
@@ -740,10 +1135,14 @@ function makeGasTexture(tint, band) {
   return tex;
 }
 
-function seededPhase(text) {
+function hashString(text) {
   let h = 2166136261;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
-  return ((h >>> 0) / 4294967295) * Math.PI * 2;
+  return h >>> 0;
+}
+
+function seededPhase(text) {
+  return (hashString(text) / 4294967295) * Math.PI * 2;
 }
 
 function seededRandom(seed) {
