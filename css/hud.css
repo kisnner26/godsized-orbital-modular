@@ -61,3 +61,101 @@ body.is-free-mode .radio{top:135px}
 @keyframes radioPulse{0%,100%{opacity:.6}50%{opacity:1}}
 .radio__info strong{display:block;font-size:11px;color:#eaffff;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .radio input[type=range]{width:100%;margin-top:8px;accent-color:#72ffe4;cursor:pointer}
+
+/* ==== Capa de Exploración estilo No Man's Sky ==== */
+
+/* Barras del exotraje (abajo-izquierda) */
+.suit{position:fixed;z-index:33;left:34px;bottom:104px;width:230px;padding:12px 14px;background:linear-gradient(135deg,rgba(0,20,28,.66),rgba(0,0,0,.34));border:1px solid rgba(100,255,225,.2);box-shadow:0 10px 40px rgba(0,0,0,.4);backdrop-filter:blur(8px);pointer-events:none}
+.suit__row{display:flex;align-items:center;gap:10px;margin:5px 0}
+.suit__label{flex:none;width:92px;font-size:8.5px;letter-spacing:.16em;color:rgba(150,255,230,.6)}
+.suit__bar{flex:1;height:7px;background:rgba(255,255,255,.08);border:1px solid rgba(120,255,230,.14);overflow:hidden}
+.suit__fill{height:100%;width:100%;transition:width .18s ease-out}
+.suit__bar.is-low{animation:suitLow .7s infinite alternate}
+@keyframes suitLow{from{border-color:rgba(255,90,90,.25)}to{border-color:rgba(255,90,90,.95)}}
+.suit__hazard{margin-top:8px;padding:4px 8px;font-size:9px;letter-spacing:.18em;color:#ffd8a0;background:rgba(90,40,0,.4);border:1px solid rgba(255,170,80,.45);text-align:center;animation:pulse 1.4s infinite}
+
+/* Toasts de recogida (derecha) */
+.toasts{position:fixed;z-index:36;right:34px;top:96px;display:flex;flex-direction:column;gap:7px;align-items:flex-end;pointer-events:none}
+.toast{display:flex;align-items:center;gap:9px;padding:8px 13px;background:linear-gradient(135deg,rgba(0,22,30,.78),rgba(0,0,0,.5));border:1px solid rgba(110,255,230,.28);font-size:11px;letter-spacing:.06em;color:#eaffff;box-shadow:0 8px 30px rgba(0,0,0,.4);animation:toastIn .22s ease-out;transition:opacity .6s,transform .6s}
+.toast.is-out{opacity:0;transform:translateX(24px)}
+@keyframes toastIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+.toast__sym{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 4px;font-size:10px;font-weight:700;color:#04121a;background:var(--c,#7dffda);border-radius:4px}
+.toast__name{color:rgba(220,255,250,.85)}
+.toast__qty{font-weight:700;color:#9affde}
+.toast--warn{border-color:rgba(255,170,80,.55);color:#ffe2c0}
+.toast--danger{border-color:rgba(255,90,90,.6);color:#ffd0d0}
+.toast--units{border-color:rgba(160,190,255,.5)}
+.toast--units .toast__qty{color:#bcd4ff}
+
+/* Banner de descubrimiento */
+.discovery{position:fixed;z-index:37;left:50%;top:22%;transform:translateX(-50%);min-width:340px;text-align:center;padding:20px 44px;background:linear-gradient(180deg,rgba(0,26,34,.82),rgba(0,4,8,.6));border-top:1px solid rgba(120,255,230,.5);border-bottom:1px solid rgba(120,255,230,.5);pointer-events:none}
+.discovery__eyebrow{font-size:10px;letter-spacing:.4em;color:rgba(150,255,230,.7)}
+.discovery h2{margin:8px 0 4px;font-size:26px;letter-spacing:.2em;color:#f2ffff;text-shadow:0 0 26px rgba(110,255,230,.5);font-weight:600}
+.discovery p{margin:0;font-size:11px;letter-spacing:.14em;color:rgba(200,240,255,.7)}
+.discovery.is-on{animation:discIn .7s ease-out}
+@keyframes discIn{from{opacity:0;transform:translateX(-50%) scale(.94)}to{opacity:1;transform:translateX(-50%) scale(1)}}
+
+/* Tarjeta de análisis del planeta */
+.planet-card{position:fixed;z-index:33;right:34px;top:170px;width:240px;padding:14px 16px;background:linear-gradient(135deg,rgba(0,20,28,.78),rgba(0,0,0,.5));border:1px solid rgba(110,255,230,.3);box-shadow:0 14px 50px rgba(0,0,0,.45);backdrop-filter:blur(10px);pointer-events:none}
+.pc__eyebrow{font-size:8.5px;letter-spacing:.28em;color:rgba(150,255,230,.6)}
+.planet-card h3{margin:6px 0 10px;font-size:17px;letter-spacing:.12em;color:#f2ffff;font-weight:600}
+.pc__row{display:flex;justify-content:space-between;gap:10px;margin:5px 0;font-size:10px;letter-spacing:.1em}
+.pc__row span{color:rgba(150,255,230,.55)}
+.pc__row strong{color:#eaffff;font-weight:500;text-align:right}
+.pc__res{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;margin-left:4px;padding:0 3px;font-size:9px;font-weight:700;color:#04121a;background:var(--c,#7dffda);border-radius:3px}
+
+/* Marcadores del escáner proyectados en pantalla */
+.res-markers{position:fixed;inset:0;z-index:31;pointer-events:none;overflow:hidden}
+.res-marker{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;gap:2px;margin:-14px 0 0 -14px;will-change:transform}
+.res-marker__icon{display:flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 3px;font-size:9.5px;font-weight:700;color:#04121a;background:var(--c,#7dffda);border-radius:50%;box-shadow:0 0 14px var(--c,#7dffda),0 2px 8px rgba(0,0,0,.5);animation:markerPop .3s ease-out}
+.res-marker__icon--fauna{background:#ff9ae0;box-shadow:0 0 14px #ff9ae0;border-radius:4px}
+.res-marker__dist{font-size:8.5px;letter-spacing:.08em;color:#dffcf5;text-shadow:0 1px 4px #000;background:rgba(0,10,14,.55);padding:1px 5px;border-radius:6px}
+@keyframes markerPop{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* Pulso del escáner */
+.scan-pulse{position:fixed;inset:0;z-index:29;pointer-events:none}
+.scan-pulse.is-on:before{content:"";position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:2px solid rgba(120,255,230,.85);box-shadow:0 0 40px rgba(120,255,230,.5),inset 0 0 30px rgba(120,255,230,.3);animation:scanRing 1.1s ease-out forwards}
+@keyframes scanRing{from{transform:scale(.2);opacity:1}to{transform:scale(46);opacity:0}}
+
+/* Viñeta de calor de entrada atmosférica */
+.entry-vignette{position:fixed;inset:0;z-index:28;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 42%,rgba(255,90,10,.55) 100%);transition:opacity .3s}
+
+/* Retícula a pie */
+.foot-reticle{position:fixed;left:50%;top:50%;z-index:31;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:rgba(230,255,250,.9);box-shadow:0 0 8px rgba(120,255,230,.9),0 0 2px #fff;pointer-events:none}
+.foot-reticle:after{content:"";position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1px solid rgba(120,255,230,.35)}
+
+/* Arsenal del modo historia */
+.weapon-hud{position:fixed;z-index:35;right:34px;bottom:104px;width:300px;padding:12px 14px;background:linear-gradient(145deg,rgba(12,10,14,.82),rgba(0,16,22,.68));border:1px solid rgba(255,120,120,.28);box-shadow:0 18px 60px rgba(0,0,0,.48),0 0 34px rgba(255,90,90,.08);backdrop-filter:blur(12px);pointer-events:auto}
+.weapon-hud header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.weapon-hud header span,.weapon-readout span,.zorro-health__label span{font-size:8.5px;letter-spacing:.24em;color:rgba(255,155,155,.7)}
+.weapon-hud header strong{font-size:12px;letter-spacing:.06em;color:#fff;text-align:right}
+.weapon-list{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.weapon-list button{display:flex;align-items:center;gap:7px;min-height:34px;padding:5px 8px;border:1px solid rgba(255,255,255,.12);border-radius:5px;background:rgba(0,18,26,.52);color:rgba(232,255,255,.76);font-size:10px;letter-spacing:.02em;cursor:pointer;text-align:left;transition:background .15s,border-color .15s,color .15s}
+.weapon-list button b{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:3px;background:rgba(255,120,120,.2);color:#ffd7d7;font-size:10px}
+.weapon-list button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.weapon-list button:hover,.weapon-list button:focus-visible{border-color:rgba(255,155,155,.55);background:rgba(80,28,34,.5);outline:none}
+.weapon-list button.active{border-color:rgba(255,130,130,.85);background:linear-gradient(135deg,rgba(255,90,90,.72),rgba(32,110,116,.48));color:#fff}
+.weapon-list button.reloading{opacity:.5}
+.weapon-readout{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.1)}
+.weapon-readout strong{font-size:14px;letter-spacing:.08em;color:#eaffff;text-shadow:0 0 12px rgba(120,255,230,.25)}
+.zorro-health{margin-top:10px}
+.zorro-health__label{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.zorro-health__label strong{font-size:11px;letter-spacing:.08em;color:#ffd7d7}
+.zorro-health__bar{height:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,120,120,.26);overflow:hidden}
+.zorro-health__bar span{display:block;width:100%;height:100%;background:linear-gradient(90deg,#ff5d5d,#ffd36e);box-shadow:0 0 18px rgba(255,90,90,.38);transition:width .16s ease}
+.weapon-toggle{position:fixed;z-index:36;right:34px;bottom:64px;min-width:118px;min-height:36px;padding:0 14px;border:1px solid rgba(255,140,140,.38);border-radius:5px;background:rgba(12,10,14,.76);color:#ffd7d7;font-size:10px;font-weight:800;letter-spacing:.18em;box-shadow:0 12px 38px rgba(0,0,0,.42),0 0 24px rgba(255,90,90,.12);backdrop-filter:blur(12px);cursor:pointer;transition:background .15s,border-color .15s,color .15s,transform .15s}
+.weapon-toggle:hover,.weapon-toggle:focus-visible{border-color:rgba(255,190,140,.78);background:rgba(72,28,35,.84);color:#fff;outline:none;transform:translateY(-1px)}
+.weapon-toggle.is-collapsed{background:rgba(255,92,92,.82);border-color:rgba(255,210,160,.82);color:#fff}
+@media (max-width:760px){.weapon-hud{left:16px;right:16px;bottom:236px;width:auto}.weapon-list{grid-template-columns:1fr}.weapon-toggle{right:16px;bottom:188px}}
+
+/* Panel de inventario del exotraje */
+.invpanel{position:fixed;z-index:44;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 40px));padding:18px 20px;background:linear-gradient(160deg,rgba(2,24,32,.94),rgba(0,4,8,.9));border:1px solid rgba(110,255,230,.35);box-shadow:0 30px 120px rgba(0,0,0,.7);backdrop-filter:blur(14px)}
+.invpanel header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-size:11px;letter-spacing:.24em;color:rgba(150,255,230,.7)}
+.invpanel header strong{font-size:13px;letter-spacing:.08em;color:#bcd4ff;text-shadow:0 0 12px rgba(140,180,255,.5)}
+.inv__grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.inv__slot{display:flex;align-items:center;gap:9px;padding:9px 11px;background:rgba(0,26,34,.5);border:1px solid rgba(110,255,230,.18)}
+.inv__slot.is-empty{opacity:.35}
+.inv__sym{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 4px;font-size:10px;font-weight:700;color:#04121a;background:var(--c,#7dffda);border-radius:4px}
+.inv__name{flex:1;font-size:10.5px;letter-spacing:.06em;color:rgba(225,255,250,.85)}
+.inv__qty{font-size:13px;font-weight:700;color:#eaffff}
+.invpanel footer{margin-top:14px;font-size:9.5px;letter-spacing:.12em;color:rgba(150,255,230,.5);text-align:center}

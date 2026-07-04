@@ -24,6 +24,8 @@ float fbm(vec3 p){ float v=0.0, a=0.5; for(int i=0;i<5;i++){ v+=a*vnoise(p); p*=
 `;
 
 const SUN_VERT = `
+bool isPerspectiveMatrix( mat4 m ) { return m[ 2 ][ 3 ] == - 1.0; }
+#include <logdepthbuf_pars_vertex>
 varying vec3 vPos; varying vec3 vNormalW; varying vec3 vView;
 void main(){
   vPos = position;
@@ -31,13 +33,16 @@ void main(){
   vec4 mv = modelViewMatrix * vec4(position,1.0);
   vView = normalize(-mv.xyz);
   gl_Position = projectionMatrix * mv;
+  #include <logdepthbuf_vertex>
 }`;
 
 const SUN_FRAG = `
+#include <logdepthbuf_pars_fragment>
 uniform float uTime;
 varying vec3 vPos; varying vec3 vNormalW; varying vec3 vView;
 ${NOISE_GLSL}
 void main(){
+  #include <logdepthbuf_fragment>
   vec3 p = normalize(vPos);
   float t = uTime * 0.06;
   // Granulación convectiva + filamentos
@@ -66,18 +71,23 @@ void main(){
 }`;
 
 const CORONA_VERT = `
+bool isPerspectiveMatrix( mat4 m ) { return m[ 2 ][ 3 ] == - 1.0; }
+#include <logdepthbuf_pars_vertex>
 varying vec3 vNormalW; varying vec3 vView;
 void main(){
   vNormalW = normalize(normalMatrix * normal);
   vec4 mv = modelViewMatrix * vec4(position,1.0);
   vView = normalize(-mv.xyz);
   gl_Position = projectionMatrix * mv;
+  #include <logdepthbuf_vertex>
 }`;
 
 const CORONA_FRAG = `
+#include <logdepthbuf_pars_fragment>
 uniform float uTime;
 varying vec3 vNormalW; varying vec3 vView;
 void main(){
+  #include <logdepthbuf_fragment>
   float ndv = abs(dot(normalize(vNormalW), vView));
   float glow = pow(1.0 - ndv, 2.6);
   float flick = 0.85 + 0.15*sin(uTime*2.0);
@@ -87,18 +97,23 @@ void main(){
 
 // Atmósfera/halo fresnel para planetas (scattering simple)
 const ATMO_VERT = `
+bool isPerspectiveMatrix( mat4 m ) { return m[ 2 ][ 3 ] == - 1.0; }
+#include <logdepthbuf_pars_vertex>
 varying vec3 vNormalW; varying vec3 vView;
 void main(){
   vNormalW = normalize(normalMatrix * normal);
   vec4 mv = modelViewMatrix * vec4(position,1.0);
   vView = normalize(-mv.xyz);
   gl_Position = projectionMatrix * mv;
+  #include <logdepthbuf_vertex>
 }`;
 
 const ATMO_FRAG = `
+#include <logdepthbuf_pars_fragment>
 uniform vec3 uColor; uniform float uPower; uniform float uStrength;
 varying vec3 vNormalW; varying vec3 vView;
 void main(){
+  #include <logdepthbuf_fragment>
   float ndv = max(dot(normalize(vNormalW), vView), 0.0);
   float fres = pow(1.0 - ndv, uPower);
   gl_FragColor = vec4(uColor, fres * uStrength);
@@ -407,6 +422,10 @@ export class SolarSystem {
   }
 
   build() {
+    // Idempotente: se difiere del arranque a la primera entrada en modo Sistema
+    // Solar (si el jugador va directo a Exploración, nunca se paga su coste).
+    if (this._built) return;
+    this._built = true;
     this.solarExtra = [];   // órbitas + asteroides (para ocultar en otros escenarios)
     this.buildSun();
 

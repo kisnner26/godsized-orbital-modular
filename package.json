@@ -1,0 +1,32 @@
+{
+  "name": "orion-07",
+  "version": "1.0.0",
+  "description": "GOD-SIZED UNIVERSE - Orion-07 orbital flight sim",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kisnner26/godsized-orbital-modular.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/kisnner26/godsized-orbital-modular/issues"
+  },
+  "homepage": "https://github.com/kisnner26/godsized-orbital-modular#readme",
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^8.1.3",
+    "vite-plugin-glsl": "^1.6.0"
+  }
+}
